@@ -58,7 +58,7 @@ jobs:
           ID: ${{ matrix.package.id }}
           PACKAGE_PATH: ${{ matrix.package.path }}
         run: |
-          version=$(node -p "require('./'$PACKAGE_PATH'/package.json').version")
+          version=$(jq -r .version "$PACKAGE_PATH/package.json")
           if npm view "$ID@$version" version >/dev/null 2>npm-view.err; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "$ID@$version already exists on npm; skipping release."
