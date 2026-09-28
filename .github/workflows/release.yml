@@ -1,4 +1,4 @@
-name: Release affected packages
+name: Stage affected packages
 
 on:
   workflow_dispatch:
@@ -8,13 +8,14 @@ on:
         required: true
         type: string
       publish:
-        description: Publish packages and create releases; false performs a dry run.
+        description: Stage packages for npm approval; false performs a dry run.
         required: true
         default: false
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
+  id-token: write
 
 jobs:
   discover:
@@ -46,9 +47,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.14.0
           registry-url: https://registry.npmjs.org
           cache: npm
+      - run: npm install --global npm@11.5.1
       - run: npm ci
       - id: version
         name: Check npm package version
@@ -67,21 +69,9 @@ jobs:
             exit 1
           fi
       - run: bash scripts/test-package.sh "${{ matrix.package.path }}"
-      - name: Verify package publication
+      - name: Verify staged publication
         if: ${{ steps.version.outputs.publish == 'true' && !inputs.publish }}
-        run: npm publish "${{ matrix.package.path }}" --access public --dry-run
-      - name: Publish package
+        run: npm stage publish "${{ matrix.package.path }}" --access public --dry-run
+      - name: Stage package for approval
         if: ${{ steps.version.outputs.publish == 'true' && inputs.publish }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish "${{ matrix.package.path }}" --access public
-      - name: Create GitHub release
-        if: ${{ steps.version.outputs.publish == 'true' && inputs.publish }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ID: ${{ matrix.package.id }}
-          PATH: ${{ matrix.package.path }}
-        run: |
-          version=$(node -p "require('./'$PATH'/package.json').version")
-          tag="${ID#*/}-v$version"
-          gh release create "$tag" --target "$GITHUB_SHA" --generate-notes --title "$tag"
+        run: npm stage publish "${{ matrix.package.path }}" --access public
