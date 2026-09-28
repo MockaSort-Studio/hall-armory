@@ -17,7 +17,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MockaSort-Studio/hall-armory.git",
-    "directory": "extensions/collaboration/github"
+    "directory": "collaboration/github"
   },
   "pi": {
     "extensions": [

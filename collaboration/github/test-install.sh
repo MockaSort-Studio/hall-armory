@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
-PACKAGE="$ROOT/extensions/collaboration/github"
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+PACKAGE="$ROOT/collaboration/github"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

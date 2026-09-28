@@ -1,6 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { packageSourceIsIsolated, validateCatalog } from "../lib/validate.mjs";
+import {
+  suitePackagesAreCoLocated,
+  validateCatalog,
+} from "../lib/validate.mjs";
 
 const root = new URL("../", import.meta.url).pathname;
 
@@ -11,6 +14,6 @@ test("catalog manifests are valid and uniquely indexed", () => {
   );
 });
 
-test("package source is isolated below extensions", () => {
-  assert.equal(packageSourceIsIsolated(root), true);
+test("each cataloged suite has co-located package source", () => {
+  assert.equal(suitePackagesAreCoLocated(root), true);
 });

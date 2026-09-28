@@ -6,7 +6,7 @@
   "scripts": {
     "test": "npm run test:catalog && npm run test:github",
     "test:catalog": "node --test tests/*.test.mjs && npm run validate",
-    "test:github": "node --test extensions/collaboration/github/test/*.test.mjs && bash extensions/collaboration/github/test-install.sh",
+    "test:github": "node --test collaboration/github/test/*.test.mjs && bash collaboration/github/test-install.sh",
     "validate": "node tests/validate-catalog.mjs"
   },
   "devDependencies": {

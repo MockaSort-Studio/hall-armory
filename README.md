@@ -11,14 +11,14 @@ using a verified cache/fetch fallback only when preparation is approved.
 ## Layout
 
 ```text
-manifest.json                       # lockers and suite index
-collaboration/github/manifest.json    # package/native/tool metadata
-extensions/collaboration/github/      # releasable GitHub Pi extension package
+manifest.json                    # lockers and suite index
+collaboration/github/             # suite manifest and releasable GitHub package
 ```
 
 Each suite manifest identifies one independently installable Pi package, its
 native requirement, and its exact tool allowlist. Package source, schemas, and
-registration handlers live below `extensions/`; Crew runtime accessors do not.
+registration handlers are co-located with that suite; Crew runtime accessors
+do not belong in this repository.
 
 ## Development
 

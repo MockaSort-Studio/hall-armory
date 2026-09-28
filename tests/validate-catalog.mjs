@@ -1,7 +1,10 @@
-import { packageSourceIsIsolated, validateCatalog } from "../lib/validate.mjs";
+import {
+  suitePackagesAreCoLocated,
+  validateCatalog,
+} from "../lib/validate.mjs";
 
 const root = new URL("../", import.meta.url).pathname;
 validateCatalog(root);
-if (!packageSourceIsIsolated(root))
-  throw new Error("Package source must stay below extensions");
+if (!suitePackagesAreCoLocated(root))
+  throw new Error("Every cataloged suite must have co-located package source");
 console.log("Armory catalog is valid");

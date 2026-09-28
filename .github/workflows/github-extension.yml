@@ -2,18 +2,10 @@ name: Test GitHub extension
 
 on:
   pull_request:
-    paths:
-      [
-        "extensions/collaboration/github/**",
-        ".github/workflows/github-extension.yml",
-      ]
+    paths: ["collaboration/github/**", ".github/workflows/github-extension.yml"]
   push:
     branches: [main]
-    paths:
-      [
-        "extensions/collaboration/github/**",
-        ".github/workflows/github-extension.yml",
-      ]
+    paths: ["collaboration/github/**", ".github/workflows/github-extension.yml"]
 
 permissions:
   contents: read
