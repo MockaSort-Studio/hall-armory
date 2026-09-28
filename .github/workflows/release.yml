@@ -7,6 +7,11 @@ on:
         description: Commit or tag before the changes to release
         required: true
         type: string
+      publish:
+        description: Publish packages and create releases; false performs a dry run.
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -46,11 +51,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: bash scripts/test-package.sh "${{ matrix.package.path }}"
+      - name: Verify package publication
+        if: ${{ !inputs.publish }}
+        run: npm publish "${{ matrix.package.path }}" --access public --dry-run
       - name: Publish package
+        if: ${{ inputs.publish }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish "${{ matrix.package.path }}" --access public
       - name: Create GitHub release
+        if: ${{ inputs.publish }}
         env:
           GH_TOKEN: ${{ github.token }}
           ID: ${{ matrix.package.id }}
