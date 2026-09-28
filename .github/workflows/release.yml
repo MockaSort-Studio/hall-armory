@@ -1,10 +1,12 @@
 name: Stage affected packages
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       base:
-        description: Commit or tag before the changes to release
+        description: Commit or tag before the changes to stage
         required: true
         type: string
       publish:
@@ -32,7 +34,7 @@ jobs:
       - uses: MockaSort-Studio/actions/.github/actions/changes-filter@main
         id: filter
         with:
-          base: ${{ inputs.base }}
+          base: ${{ github.event.before || inputs.base }}
           head: ${{ github.sha }}
           items: ${{ steps.items.outputs.items }}
   release:
@@ -69,8 +71,8 @@ jobs:
           fi
       - run: bash scripts/test-package.sh "${{ matrix.package.path }}"
       - name: Verify staged publication
-        if: ${{ steps.version.outputs.publish == 'true' && !inputs.publish }}
+        if: ${{ steps.version.outputs.publish == 'true' && github.event_name == 'workflow_dispatch' && !inputs.publish }}
         run: npx --yes npm@12.1.0 stage publish "${{ matrix.package.path }}" --access public --dry-run
       - name: Stage package for approval
-        if: ${{ steps.version.outputs.publish == 'true' && inputs.publish }}
+        if: ${{ steps.version.outputs.publish == 'true' && (github.event_name == 'push' || inputs.publish) }}
         run: npx --yes npm@12.1.0 stage publish "${{ matrix.package.path }}" --access public
