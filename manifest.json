@@ -1,0 +1,14 @@
+{
+  "format": "hall.armory/v1",
+  "lockers": [
+    {
+      "name": "collaboration",
+      "suites": [
+        {
+          "extension": "pi-github-tools",
+          "manifest": "collaboration/github/manifest.json"
+        }
+      ]
+    }
+  ]
+}
