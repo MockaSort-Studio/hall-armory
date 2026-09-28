@@ -1,8 +1,5 @@
-// This package owns one complete GitHub operation descriptor set. Static Pi
-// installation and future sandbox preparation both register through this same
-// descriptor list, so neither path has a separate schema copy to maintain.
-// Catalog placement, Crew profiles, and native-tool preparation belong outside
-// this package.
+// One complete GitHub operation descriptor set, registered through one schema
+// path for every Pi installation.
 
 import { coreOperationDescriptors } from "./core/tools.ts";
 import { discussionOperationDescriptors } from "./discussions/tools.ts";

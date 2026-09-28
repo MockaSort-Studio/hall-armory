@@ -1,6 +1,6 @@
 {
   "name": "@mockasort-studio/pi-github-tools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "GitHub CLI tools for Pi coding agent extensions.",
   "license": "GPL-3.0-only",
   "type": "module",
@@ -16,13 +16,16 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/MockaSort-Studio/hall-armory.git",
+    "url": "git+https://github.com/MockaSort-Studio/hall-armory.git",
     "directory": "collaboration/github"
   },
   "pi": {
     "extensions": [
       "./src/index.ts"
     ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs && bash test-install.sh"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"

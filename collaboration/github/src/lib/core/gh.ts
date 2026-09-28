@@ -48,9 +48,7 @@ function context(args, opts) {
   return { operation, resource };
 }
 
-// GitHub is an extension artifact, not a one-off Armory binary. Until a
-// packaged artifact supplies a guest executor, its normal CLI adapter remains
-// the host `gh` invocation used by the static extension path.
+// The extension executes GitHub operations through the authenticated `gh` CLI.
 export async function gh(args, opts = {}, deps = { execFileSync }) {
   const { operation, resource } = context(args, opts);
   const { operation: _operation, resource: _resource, ...execOpts } = opts;
