@@ -1,15 +1,12 @@
-name: Release affected packages
+name: Test affected packages
 
 on:
-  workflow_dispatch:
-    inputs:
-      base:
-        description: Commit or tag before the changes to release
-        required: true
-        type: string
+  pull_request:
+  push:
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   discover:
@@ -22,8 +19,11 @@ jobs:
         with:
           fetch-depth: 0
       - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          git diff --name-only "${{ inputs.base }}" "$GITHUB_SHA" | jq -Rsc 'split("\n") | map(select(length > 0))' > files.json
+          base=${BASE:-HEAD^}
+          git diff --name-only "$base" "$GITHUB_SHA" | jq -Rsc 'split("\n") | map(select(length > 0))' > files.json
           echo "files=$(cat files.json)" >> "$GITHUB_OUTPUT"
       - id: items
         run: echo "items=$(node scripts/catalog-items.mjs)" >> "$GITHUB_OUTPUT"
@@ -32,7 +32,7 @@ jobs:
         with:
           changed-files: ${{ steps.diff.outputs.files }}
           items: ${{ steps.items.outputs.items }}
-  release:
+  test:
     needs: discover
     if: needs.discover.outputs.any == 'true'
     strategy:
@@ -45,20 +45,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
       - run: bash scripts/test-package.sh "${{ matrix.package.path }}"
-      - name: Publish package
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish "${{ matrix.package.path }}" --access public
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ID: ${{ matrix.package.id }}
-          PATH: ${{ matrix.package.path }}
-        run: |
-          version=$(node -p "require('./'$PATH'/package.json').version")
-          tag="${ID#*/}-v$version"
-          gh release create "$tag" --target "$GITHUB_SHA" --generate-notes --title "$tag"
