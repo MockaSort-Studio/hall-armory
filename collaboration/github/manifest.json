@@ -21,11 +21,13 @@
     "cacheFallback": {
       "linux-arm64": {
         "url": "https://github.com/cli/cli/releases/download/v2.101.0/gh_2.101.0_linux_arm64.tar.gz",
-        "sha256": "b57e8063f18862647c9d22727c32e9da1b963f8bf9db648fe123a6975695640f"
+        "sha256": "b57e8063f18862647c9d22727c32e9da1b963f8bf9db648fe123a6975695640f",
+        "archive": { "format": "tar.gz", "binary": "bin/gh", "stripComponents": 2 }
       },
       "linux-amd64": {
         "url": "https://github.com/cli/cli/releases/download/v2.101.0/gh_2.101.0_linux_amd64.tar.gz",
-        "sha256": "9bca2d1c16825f109907a23307628a2f0698fbf99662b73a5cf0b020293072b8"
+        "sha256": "9bca2d1c16825f109907a23307628a2f0698fbf99662b73a5cf0b020293072b8",
+        "archive": { "format": "tar.gz", "binary": "bin/gh", "stripComponents": 2 }
       }
     }
   },
