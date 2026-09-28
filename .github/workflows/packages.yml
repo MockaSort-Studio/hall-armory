@@ -18,19 +18,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - id: diff
-        env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          base=${BASE:-HEAD^}
-          git diff --name-only "$base" "$GITHUB_SHA" | jq -Rsc 'split("\n") | map(select(length > 0))' > files.json
-          echo "files=$(cat files.json)" >> "$GITHUB_OUTPUT"
       - id: items
         run: echo "items=$(node scripts/catalog-items.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: MockaSort-Studio/actions/.github/actions/changes-filter@3f5220b
+      - uses: MockaSort-Studio/actions/.github/actions/changes-filter@main
         id: filter
         with:
-          changed-files: ${{ steps.diff.outputs.files }}
+          base: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
+          head: ${{ github.sha }}
           items: ${{ steps.items.outputs.items }}
   test:
     needs: discover
