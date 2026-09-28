@@ -1,7 +1,11 @@
 {
   "format": "hall.armory-suite/v1",
   "extension": "pi-github-tools",
-  "package": "@mockasort-studio/pi-github-tools",
+  "package": {
+    "name": "@mockasort-studio/pi-github-tools",
+    "version": "0.1.2",
+    "integrity": "sha512-I5tR2sjLILslcsjF8pYDp3pjH/54W7zqucJ/xjVBH9KT9ViwNoTmZs3gOmYo01lPK2PdrjQ8gEF5o+s/P+8hvg=="
+  },
   "summary": "GitHub repository, issue, pull request, discussion, project, and label operations.",
   "capabilities": [
     "repository",
