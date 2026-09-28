@@ -1,0 +1,31 @@
+name: Test GitHub extension
+
+on:
+  pull_request:
+    paths:
+      [
+        "extensions/collaboration/github/**",
+        ".github/workflows/github-extension.yml",
+      ]
+  push:
+    branches: [main]
+    paths:
+      [
+        "extensions/collaboration/github/**",
+        ".github/workflows/github-extension.yml",
+      ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:github
