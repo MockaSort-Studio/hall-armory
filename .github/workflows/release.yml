@@ -50,17 +50,33 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
+      - id: version
+        name: Check npm package version
+        env:
+          ID: ${{ matrix.package.id }}
+          PATH: ${{ matrix.package.path }}
+        run: |
+          version=$(node -p "require('./'$PATH'/package.json').version")
+          if npm view "$ID@$version" version >/dev/null 2>npm-view.err; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "$ID@$version already exists on npm; skipping release."
+          elif grep -q 'E404' npm-view.err; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            cat npm-view.err >&2
+            exit 1
+          fi
       - run: bash scripts/test-package.sh "${{ matrix.package.path }}"
       - name: Verify package publication
-        if: ${{ !inputs.publish }}
+        if: ${{ steps.version.outputs.publish == 'true' && !inputs.publish }}
         run: npm publish "${{ matrix.package.path }}" --access public --dry-run
       - name: Publish package
-        if: ${{ inputs.publish }}
+        if: ${{ steps.version.outputs.publish == 'true' && inputs.publish }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish "${{ matrix.package.path }}" --access public
       - name: Create GitHub release
-        if: ${{ inputs.publish }}
+        if: ${{ steps.version.outputs.publish == 'true' && inputs.publish }}
         env:
           GH_TOKEN: ${{ github.token }}
           ID: ${{ matrix.package.id }}
