@@ -15,7 +15,7 @@
     "projects",
     "labels"
   ],
-  "native": { "closure": "." },
+  "native": { "closure": ".", "output": "guest" },
   "tools": [
     "github_repo_discussions_set",
     "github_discussion_comments",

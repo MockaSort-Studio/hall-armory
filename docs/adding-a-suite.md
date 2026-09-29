@@ -8,9 +8,10 @@ manifests, native archive URLs, or handler source outside the suite directory.
 2. Add its index entry to `manifest.json`.
 3. Set `extension` and `package` to the releasable Pi package identity.
 4. Add `flake.nix` and its generated `flake.lock` at the suite root.
-5. Set `native.closure` to `.`, allowing the flake to build the complete
-   co-located suite source as well as its native dependencies.
-6. Expose the guest suite runner as the Nix flake's default app. The app program
+5. Set `native.closure` to `.` and `native.output` to the guest output name
+   (normally `guest`), allowing Env to build the complete co-located suite
+   source and exact intended flake output.
+6. Expose the guest suite runner as that Nix flake output's default app. The app program
    is the exact store entrypoint; do not repeat command paths or input hashes
    in the suite manifest.
 7. Implement the runner as a one-shot guest executable, not a Pi extension,
