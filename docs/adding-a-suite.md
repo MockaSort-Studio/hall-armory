@@ -7,9 +7,10 @@ manifests, native archive URLs, or handler source outside the suite directory.
 1. Add the suite manifest below a locker directory.
 2. Add its index entry to `manifest.json`.
 3. Set `extension` and `package` to the releasable Pi package identity.
-4. Add `nix/flake.nix` and its generated `nix/flake.lock`.
-5. Set `native.closure` to that relative directory, normally `./nix`.
-6. Expose the native program as the Nix flake's default app. The app program
+4. Add `flake.nix` and its generated `flake.lock` at the suite root.
+5. Set `native.closure` to `.`, allowing the flake to build the complete
+   co-located suite source as well as its native dependencies.
+6. Expose the guest suite runner as the Nix flake's default app. The app program
    is the exact store entrypoint; do not repeat command paths or input hashes
    in the suite manifest.
 7. List every tool name the package may expose; preparation rejects undeclared

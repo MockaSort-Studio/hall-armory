@@ -3,8 +3,8 @@
   "extension": "pi-github-tools",
   "package": {
     "name": "@mockasort-studio/pi-github-tools",
-    "version": "0.1.5",
-    "integrity": "sha512-BLYGUY4xoqqXiejjuA729KNXwMMvxHP3E06lBVr7YsOswcRW2vmwMt8HsommNcIPCPVAtprPmshZCsZob+Tumw=="
+    "version": "0.1.6",
+    "integrity": "sha512-xuKbiB886ksKeiYqWDWlGP5xEEcZwzl/NLbPOaw257LeHi5VkZyX4guePRicSQJvcAjcS6YSlpmqc1jZdWTcxQ=="
   },
   "summary": "GitHub repository, issue, pull request, discussion, project, and label operations.",
   "capabilities": [
@@ -15,7 +15,7 @@
     "projects",
     "labels"
   ],
-  "native": { "closure": "./nix" },
+  "native": { "closure": "." },
   "tools": [
     "github_repo_discussions_set",
     "github_discussion_comments",

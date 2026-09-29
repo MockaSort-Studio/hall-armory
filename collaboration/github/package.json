@@ -1,6 +1,6 @@
 {
   "name": "@mockasort-studio/pi-github-tools",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "GitHub CLI tools for Pi coding agent extensions.",
   "license": "GPL-3.0-only",
   "type": "module",
@@ -11,7 +11,10 @@
   ],
   "files": [
     "src",
-    "nix",
+    "flake.nix",
+    "flake.lock",
+    "guest-runner.ts",
+    "package-lock.json",
     "README.md",
     "LICENSE"
   ],
@@ -27,6 +30,9 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs && bash test-install.sh"
+  },
+  "dependencies": {
+    "typebox": "1.3.32"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

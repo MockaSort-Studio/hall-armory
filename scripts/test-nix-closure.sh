@@ -11,3 +11,8 @@ closure_path="$package_path/${closure#./}"
 
 nix flake check "path:$closure_path"
 nix build --no-link "path:$closure_path#default"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+printf '{"operations":[]}' > "$tmp/input.json"
+nix run "path:$closure_path#default" -- describe "$tmp/input.json" "$tmp/output.json"
+jq -e '.operations | arrays' "$tmp/output.json" >/dev/null

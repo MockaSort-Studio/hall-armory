@@ -16,9 +16,10 @@ collaboration/github/             # suite manifest and releasable GitHub package
 ```
 
 Each suite manifest identifies one independently installable Pi package, a
-relative `native.closure` directory, and its exact tool allowlist. That
-`nix/` directory contains `flake.nix` and `flake.lock`; Nix owns the native
-dependency graph and exact store paths. Package source, schemas, and
+relative `native.closure` directory, and its exact tool allowlist. For a
+complete suite, `native.closure` is normally `.`: the suite root contains
+`flake.nix` and `flake.lock`, so Nix can build the co-located extension source
+and dependency graph as well as native tools. Package source, schemas, and
 registration handlers are co-located with that suite; Crew runtime accessors
 do not belong in this repository.
 
