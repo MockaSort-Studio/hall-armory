@@ -8,7 +8,7 @@ const items = catalog.lockers.flatMap((locker) =>
   locker.suites.map((entry) => {
     const manifest = entry.manifest;
     const suite = read(resolve(root, manifest));
-    return { id: suite.package, path: `${dirname(manifest)}/` };
+    return { id: suite.package.name, path: `${dirname(manifest)}/` };
   }),
 );
 console.log(JSON.stringify(items));
