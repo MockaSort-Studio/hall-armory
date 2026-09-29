@@ -23,6 +23,28 @@ and dependency graph as well as native tools. Package source, schemas, and
 registration handlers are co-located with that suite; Crew runtime accessors
 do not belong in this repository.
 
+## Guest suite runner
+
+A suite flake's default app is a **guest suite runner**: a one-shot executable
+built by Nix alongside the suite implementation, its locked dependencies, and
+native closures. It is neither a Pi process nor a daemon. It gives Env one
+uniform guest-side ABI:
+
+```text
+describe(approved operation names) -> operation metadata and input schemas
+invoke(approved operation name, typed input) -> structured result or error
+```
+
+The host Pi worker receives only the metadata needed to register a generic,
+session-local proxy. On a call, that proxy asks Env to invoke the runner in the
+worker's private guest. The runner then loads the suite implementation and may
+call its guest-native tools. It prevents host Pi from importing suite code,
+loading its dependencies, or executing native binaries.
+
+A direct native command is insufficient: suites may contain validation and
+higher-level extension logic. New suites must therefore expose the same runner
+contract even when their first operation is a thin CLI wrapper.
+
 ## Development
 
 ```sh

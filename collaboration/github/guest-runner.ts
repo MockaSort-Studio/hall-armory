@@ -2,23 +2,26 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { githubOperationDescriptors } from "./src/lib/suite.ts";
 
 const [mode, inputPath, outputPath] = process.argv.slice(2);
-const request = JSON.parse(readFileSync(inputPath, "utf8"));
-const selected = new Set(request.operations ?? []);
-const descriptors = githubOperationDescriptors().filter((descriptor) => selected.has(descriptor.name));
-const byName = new Map(descriptors.map((descriptor) => [descriptor.name, descriptor]));
+const write = (value: unknown) => writeFileSync(outputPath, JSON.stringify(value));
 
-function write(value: unknown) {
-  writeFileSync(outputPath, JSON.stringify(value));
-}
+try {
+  const request = JSON.parse(readFileSync(inputPath, "utf8"));
+  const selected = new Set(request.operations ?? []);
+  const descriptors = githubOperationDescriptors().filter((descriptor) => selected.has(descriptor.name));
+  const byName = new Map(descriptors.map((descriptor) => [descriptor.name, descriptor]));
 
-if (mode === "describe") {
-  write({
-    operations: descriptors.map(({ name, description, parameters }) => ({ name, description, parameters })),
-  });
-} else if (mode === "invoke") {
-  const descriptor = byName.get(request.operation);
-  if (!descriptor) throw new Error(`Guest operation is not approved: ${request.operation}`);
-  write({ result: await descriptor.execute(request.input) });
-} else {
-  throw new Error(`Unsupported guest suite mode: ${mode}`);
+  if (mode === "describe") {
+    write({
+      operations: descriptors.map(({ name, description, parameters }) => ({ name, description, parameters })),
+    });
+  } else if (mode === "invoke") {
+    const descriptor = byName.get(request.operation);
+    if (!descriptor) throw new Error(`Guest operation is not approved: ${request.operation}`);
+    write({ result: await descriptor.execute(request.input) });
+  } else {
+    throw new Error(`Unsupported guest suite mode: ${mode}`);
+  }
+} catch (error) {
+  write({ error: { message: error instanceof Error ? error.message : String(error) } });
+  process.exitCode = 1;
 }
