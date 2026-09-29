@@ -16,7 +16,15 @@ manifests, native archive URLs, or handler source outside the suite directory.
    selections.
 8. Run `npm test` and `npm run validate`.
 
-Nix owns native dependency identity and the derived closure. The release/cache
-system publishes the resulting content-addressed closure artifact; it is not
-checked into the suite source directory. The package owns its README, release
-process, implementation, and Pi registration behavior.
+Nix owns native dependency identity and the derived closure. Produce a
+portable closure artifact with:
+
+```sh
+bash scripts/export-nix-closure.sh <suite-path> <output-dir>
+```
+
+It emits `closure.nar.zst` and `closure.json`. The latter records the exact
+root store path, all required store paths, and the NAR SHA-256; Env verifies
+that index before importing the NAR into its local Nix store. The artifact is
+not checked into the suite source directory. The package owns its README,
+release process, implementation, and Pi registration behavior.
