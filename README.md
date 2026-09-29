@@ -5,8 +5,8 @@ sandbox preparation and the home of their independently releasable extension
 packages. It is not a general extension manager.
 
 A Crew profile selects a suite and a subset of its declared tools. The host
-preparation layer then resolves the suite's native requirement system-first,
-using a verified cache/fetch fallback only when preparation is approved.
+preparation layer resolves the suite's co-located, locked Nix closure and
+mounts its derived immutable layer only when preparation is approved.
 
 ## Layout
 
@@ -15,8 +15,10 @@ manifest.json                    # lockers and suite index
 collaboration/github/             # suite manifest and releasable GitHub package
 ```
 
-Each suite manifest identifies one independently installable Pi package, its
-native requirement, and its exact tool allowlist. Package source, schemas, and
+Each suite manifest identifies one independently installable Pi package, a
+relative `native.closure` directory, and its exact tool allowlist. That
+`nix/` directory contains `flake.nix` and `flake.lock`; Nix owns the native
+dependency graph and exact store paths. Package source, schemas, and
 registration handlers are co-located with that suite; Crew runtime accessors
 do not belong in this repository.
 

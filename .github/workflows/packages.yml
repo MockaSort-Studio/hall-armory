@@ -40,5 +40,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: DeterminateSystems/nix-installer-action@v19
       - run: npm ci
       - run: bash scripts/test-package.sh "${{ matrix.package.path }}"
+      - run: bash scripts/test-nix-closure.sh "${{ matrix.package.path }}"
