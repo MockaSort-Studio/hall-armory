@@ -13,8 +13,10 @@ cd "$TMP/install"
 npm init --yes >/dev/null
 npm install --ignore-scripts --legacy-peer-deps "$TARBALL" >/dev/null
 PACKAGE_ROOT="$TMP/install/node_modules/@mockasort-studio/pi-github-tools"
-test -f "$PACKAGE_ROOT/flake.nix"
-test -f "$PACKAGE_ROOT/flake.lock"
+test -f "$PACKAGE_ROOT/src/index.ts"
+test ! -e "$PACKAGE_ROOT/flake.nix"
+test ! -e "$PACKAGE_ROOT/guest"
+test ! -e "$PACKAGE_ROOT/guest-runner.ts"
 
 cat > "$TMP/assert-tools.ts" <<'EOF'
 export default function (pi) {

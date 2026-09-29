@@ -4,7 +4,7 @@
   "package": {
     "name": "@mockasort-studio/pi-github-tools",
     "version": "0.1.6",
-    "integrity": "sha512-xuKbiB886ksKeiYqWDWlGP5xEEcZwzl/NLbPOaw257LeHi5VkZyX4guePRicSQJvcAjcS6YSlpmqc1jZdWTcxQ=="
+    "integrity": "sha512-GPgkbGWB15kBSQGJrDaSK+Ra/xJCOzlTD3urHAegm0HLwaayN8iJM+HZzuFldijSFQ9BAgWZ6w19iArrCy2OEA=="
   },
   "summary": "GitHub repository, issue, pull request, discussion, project, and label operations.",
   "capabilities": [

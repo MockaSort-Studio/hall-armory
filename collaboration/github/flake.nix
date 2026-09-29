@@ -15,11 +15,16 @@
             pname = "hall-armory-github-guest";
             version = "0.1.0";
             src = ./.;
-            npmDepsHash = "sha256-jfNNLlx29dUPBzfUK3/am1+ybQfpN9AJzmfxmLRyLpE=";
-            npmFlags = [ "--legacy-peer-deps" ];
+            npmDeps = pkgs.fetchNpmDeps {
+              src = ./guest;
+              hash = "sha256-P1JSOTAE7wLU/MfqzJm07c7QeAqte1AHudR+CKOk6jY=";
+            };
+            postPatch = ''
+              cp guest/package.json guest/package-lock.json .
+            '';
             dontNpmBuild = true;
             buildPhase = ''
-              ${pkgs.esbuild}/bin/esbuild guest-runner.ts --bundle --platform=node --format=esm --outfile=runner.mjs
+              ${pkgs.esbuild}/bin/esbuild guest/runner.ts --bundle --platform=node --format=esm --outfile=runner.mjs
             '';
             installPhase = ''
               mkdir -p $out/lib $out/bin

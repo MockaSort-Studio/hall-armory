@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { githubOperationDescriptors } from "./src/lib/suite.ts";
+import { githubOperationDescriptors } from "../src/lib/suite.ts";
 
 const [mode, inputPath, outputPath] = process.argv.slice(2);
 const write = (value: unknown) => writeFileSync(outputPath, JSON.stringify(value));
