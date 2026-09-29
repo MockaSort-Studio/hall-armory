@@ -15,7 +15,7 @@ npm install --ignore-scripts --legacy-peer-deps "$TARBALL" >/dev/null
 PACKAGE_ROOT="$TMP/install/node_modules/@mockasort-studio/pi-github-tools"
 test -f "$PACKAGE_ROOT/src/index.ts"
 test ! -e "$PACKAGE_ROOT/flake.nix"
-test ! -e "$PACKAGE_ROOT/guest"
+test ! -e "$PACKAGE_ROOT/guest-suite-build"
 test ! -e "$PACKAGE_ROOT/guest-runner.ts"
 
 cat > "$TMP/assert-tools.ts" <<'EOF'

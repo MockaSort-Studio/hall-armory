@@ -16,15 +16,15 @@
             version = "0.1.0";
             src = ./.;
             npmDeps = pkgs.fetchNpmDeps {
-              src = ./guest;
+              src = ./guest-suite-build;
               hash = "sha256-P1JSOTAE7wLU/MfqzJm07c7QeAqte1AHudR+CKOk6jY=";
             };
             postPatch = ''
-              cp guest/package.json guest/package-lock.json .
+              cp guest-suite-build/package.json guest-suite-build/package-lock.json .
             '';
             dontNpmBuild = true;
             buildPhase = ''
-              ${pkgs.esbuild}/bin/esbuild guest/runner.ts --bundle --platform=node --format=esm --outfile=runner.mjs
+              ${pkgs.esbuild}/bin/esbuild guest-suite-build/runner.ts --bundle --platform=node --format=esm --outfile=runner.mjs
             '';
             installPhase = ''
               mkdir -p $out/lib $out/bin
