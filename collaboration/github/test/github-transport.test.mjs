@@ -1,14 +1,14 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { registerGithubSuite } from "../src/lib/suite.ts";
+import { activateSuite } from "../src/index.ts";
 
 test("registered operations use an injected command transport", async () => {
   const tools = new Map();
   const calls = [];
-  registerGithubSuite(
+  activateSuite(
     { registerTool: (tool) => tools.set(tool.name, tool) },
     {
-      transport: {
+      commandTransport: {
         run: async (args) => {
           calls.push(args);
           return JSON.stringify({ number: 7, title: "Guest issue" });
