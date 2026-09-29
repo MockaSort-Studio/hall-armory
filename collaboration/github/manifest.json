@@ -16,6 +16,10 @@
     "labels"
   ],
   "native": { "closure": ".", "output": "guest" },
+  "network": {
+    "allowedHosts": ["api.github.com", "github.com", "uploads.github.com"],
+    "credentials": [{ "environment": "GITHUB_TOKEN", "hosts": ["api.github.com", "github.com"] }]
+  },
   "tools": [
     "github_repo_discussions_set",
     "github_discussion_comments",
