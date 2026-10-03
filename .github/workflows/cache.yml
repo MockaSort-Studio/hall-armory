@@ -1,0 +1,78 @@
+name: Nix cache
+
+# Builds every cataloged suite's Linux guest output and publishes it to the
+# Cachix cache, so Hall clients on any OS substitute it instead of building.
+# Only main pushes; pull requests build without credentials or upload.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-cache-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PUSH: ${{ github.ref == 'refs/heads/main' }}
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      suites: ${{ steps.items.outputs.items }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: items
+        run: echo "items=$(node scripts/catalog-items.mjs)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: discover
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.discover.outputs.suites) }}
+        target:
+          - { runner: ubuntu-24.04, system: x86_64-linux }
+          - { runner: ubuntu-24.04-arm, system: aarch64-linux }
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v19
+      - uses: cachix/cachix-action@v17
+        with:
+          name: ${{ vars.CACHIX_CACHE_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: ${{ env.PUSH != 'true' }}
+      - run: bash scripts/cache-suite.sh "${{ matrix.suite.path }}" "${{ matrix.target.system }}"
+
+  # Fetch-only proof from the client side: --max-jobs 0 forbids local builds, so
+  # this fails unless the pushed cache holds the complete closure. macOS runners
+  # have no Linux builder, so a pass shows Macs substitute the Linux artifacts.
+  verify:
+    if: github.ref == 'refs/heads/main'
+    needs: [discover, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.discover.outputs.suites) }}
+        target:
+          - { runner: macos-latest, system: aarch64-linux }
+          - { runner: macos-15-intel, system: x86_64-linux }
+          - { runner: ubuntu-24.04, system: x86_64-linux }
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v19
+      - uses: cachix/cachix-action@v17
+        with:
+          name: ${{ vars.CACHIX_CACHE_NAME }}
+      - run: bash scripts/cache-suite.sh "${{ matrix.suite.path }}" "${{ matrix.target.system }}" --max-jobs 0
+        env:
+          FLAKE_BASE: github:${{ github.repository }}/${{ github.sha }}

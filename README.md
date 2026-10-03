@@ -63,3 +63,20 @@ validation and be reviewed before it can become available to sandbox profiles.
 ## License
 
 GPL-3.0-only. See [LICENSE](LICENSE).
+
+## Binary cache
+
+`.github/workflows/cache.yml` builds every cataloged suite's Linux guest output
+(`x86_64-linux`, `aarch64-linux`) and, on `main` only, pushes it to the Cachix
+cache named by the `CACHIX_CACHE_NAME` repository variable (token in the
+`CACHIX_AUTH_TOKEN` secret). After each push, macOS and Linux runners fetch the
+same artifacts with `--max-jobs 0`, proving clients substitute rather than build.
+
+Client setup (one-time, needs root; add to `/etc/nix/nix.custom.conf`):
+
+```
+extra-substituters = https://<cache>.cachix.org
+extra-trusted-public-keys = <cache>.cachix.org-1:<public key>
+```
+
+`scripts/cache-suite.sh <suite-path> <nix-system>` reproduces any CI build locally.
