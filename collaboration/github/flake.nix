@@ -14,9 +14,14 @@
           guest = pkgs.buildNpmPackage {
             pname = "hall-armory-github-guest";
             version = "0.1.0";
-            src = ./.;
+            # Copy the suite into its own content-addressed store path. A bare
+            # `./.` is a subpath of the whole flake source, which for a `?dir=`
+            # flake is the entire repository at one revision, so the derivation
+            # (and the cache key) would change with every unrelated commit and
+            # differ between `path:` and `github:` locators.
+            src = pkgs.lib.cleanSource ./.;
             npmDeps = pkgs.fetchNpmDeps {
-              src = ./guest-suite-build;
+              src = pkgs.lib.cleanSource ./guest-suite-build;
               hash = "sha256-P1JSOTAE7wLU/MfqzJm07c7QeAqte1AHudR+CKOk6jY=";
             };
             postPatch = ''
