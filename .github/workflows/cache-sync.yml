@@ -1,0 +1,54 @@
+name: Sync Nix cache
+
+# Manual full resync of every cataloged suite, e.g. after cache cleanup or a
+# Cachix retention change. Normal updates come from packages.yml per suite.
+# A pull request touching the caching machinery builds every suite without
+# pushing, so changes to it are validated before merge.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/cache-*.yml
+      - scripts/cache-suite.sh
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      suites: ${{ steps.items.outputs.items }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: items
+        run: echo "items=$(node scripts/catalog-items.mjs)" >> "$GITHUB_OUTPUT"
+  x86_64:
+    needs: discover
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.discover.outputs.suites) }}
+    uses: ./.github/workflows/cache-system.yml
+    with:
+      package: ${{ matrix.package.path }}
+      system: x86_64-linux
+      build-runner: ubuntu-24.04
+      verify-runner: ubuntu-24.04
+      push: ${{ github.event_name == 'workflow_dispatch' }}
+    secrets: inherit
+  aarch64:
+    needs: discover
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.discover.outputs.suites) }}
+    uses: ./.github/workflows/cache-system.yml
+    with:
+      package: ${{ matrix.package.path }}
+      system: aarch64-linux
+      build-runner: ubuntu-24.04-arm
+      verify-runner: macos-latest
+      push: ${{ github.event_name == 'workflow_dispatch' }}
+    secrets: inherit

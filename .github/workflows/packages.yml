@@ -44,3 +44,37 @@ jobs:
       - run: npm ci
       - run: bash scripts/test-package.sh "${{ matrix.package.path }}"
       - run: bash scripts/test-nix-closure.sh "${{ matrix.package.path }}"
+
+  # Publish each affected suite's Linux guest output after its tests pass. The
+  # guest matches the host architecture: x86_64 covers Linux and Intel Macs,
+  # aarch64 covers Apple silicon (verified on macOS). Pull requests build only.
+  cache-x86_64:
+    needs: [discover, test]
+    if: needs.discover.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.discover.outputs.packages) }}
+    uses: ./.github/workflows/cache-system.yml
+    with:
+      package: ${{ matrix.package.path }}
+      system: x86_64-linux
+      build-runner: ubuntu-24.04
+      verify-runner: ubuntu-24.04
+      push: ${{ github.event_name == 'push' }}
+    secrets: inherit
+  cache-aarch64:
+    needs: [discover, test]
+    if: needs.discover.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.discover.outputs.packages) }}
+    uses: ./.github/workflows/cache-system.yml
+    with:
+      package: ${{ matrix.package.path }}
+      system: aarch64-linux
+      build-runner: ubuntu-24.04-arm
+      verify-runner: macos-latest
+      push: ${{ github.event_name == 'push' }}
+    secrets: inherit
