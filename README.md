@@ -66,17 +66,19 @@ GPL-3.0-only. See [LICENSE](LICENSE).
 
 ## Binary cache
 
-`.github/workflows/cache.yml` builds every cataloged suite's Linux guest output
-(`x86_64-linux`, `aarch64-linux`) and, on `main` only, pushes it to the Cachix
-cache named by the `CACHIX_CACHE_NAME` repository variable (token in the
-`CACHIX_AUTH_TOKEN` secret). After each push, macOS and Linux runners fetch the
-same artifacts with `--max-jobs 0`, proving clients substitute rather than build.
+`packages.yml` builds each affected suite's Linux guest output after its tests
+pass: `x86_64-linux` (Linux, Intel Macs) and `aarch64-linux` (Apple silicon),
+as independent parallel chains (`cache-system.yml`). On `main` only, the output
+is pushed to the `hall-armory` Cachix cache (`CACHIX_CACHE_NAME` variable,
+`CACHIX_AUTH_TOKEN` secret), then fetched fetch-only (`--max-jobs 0`) on Ubuntu
+and macOS to prove clients substitute rather than build. Pull requests build
+without credentials. `cache-sync.yml` resyncs every suite on demand.
 
 Client setup (one-time, needs root; add to `/etc/nix/nix.custom.conf`):
 
 ```
-extra-substituters = https://<cache>.cachix.org
-extra-trusted-public-keys = <cache>.cachix.org-1:<public key>
+extra-substituters = https://hall-armory.cachix.org
+extra-trusted-public-keys = hall-armory.cachix.org-1:<public key from the cache page>
 ```
 
 `scripts/cache-suite.sh <suite-path> <nix-system>` reproduces any CI build locally.
