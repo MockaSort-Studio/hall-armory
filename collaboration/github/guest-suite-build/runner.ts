@@ -5,6 +5,9 @@ const [mode, inputPath, outputPath] = process.argv.slice(2);
 const write = (value: unknown) => writeFileSync(outputPath, JSON.stringify(value));
 
 try {
+  // The guest image supplies Node; fail clearly if it ever falls behind the bundle target.
+  if (Number(process.versions.node.split(".")[0]) < 22)
+    throw new Error(`Armory guest runner needs Node 22 or newer; the guest has ${process.versions.node}`);
   const request = JSON.parse(readFileSync(inputPath, "utf8"));
   const selected = new Set(request.operations ?? []);
   const descriptors = githubOperationDescriptors().filter((descriptor) => selected.has(descriptor.name));
