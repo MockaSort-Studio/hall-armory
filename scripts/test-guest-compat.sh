@@ -19,7 +19,8 @@ first_tool=$(jq -r '.tools[0]' "$suite/manifest.json")
 printf '{"operations":["%s"]}' "$first_tool" > "$tmp/in.json"
 
 guest() { docker run --rm -v /nix/store:/nix/store:ro -v "$tmp:/work" node:24-alpine "$@"; }
-guest "$out/bin/armory-suite" describe /work/in.json /work/out.json
+# One container, so the wrapper's guest-local copy of gh can be checked after the first run.
+guest sh -c "$out/bin/armory-suite describe /work/in.json /work/out.json && test -x /tmp/.hall-armory-bin/gh && /tmp/.hall-armory-bin/gh --version >/dev/null"
 jq -e --arg tool "$first_tool" '.operations | length == 1 and .[0].name == $tool' "$tmp/out.json" >/dev/null
 guest "$gh/bin/gh" --version | grep -q '^gh version'
 echo "guest compat OK: describe and gh run on Alpine/musl with Node 24"
