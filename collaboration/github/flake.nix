@@ -61,7 +61,16 @@
             cp ${runner}/lib/runner.mjs $out/lib/runner.mjs
             cat > $out/bin/armory-suite <<'EOS'
             #!/bin/sh
-            export PATH=${gh}/bin:$PATH
+            # The closure is mounted into the guest through a slow filesystem: running the
+            # 40 MB gh from it costs about 0.7 s every time. A copy in the guest's tmpfs costs
+            # about 0.5 s once and 0.09 s per run after. Fall back to the mounted binary if
+            # /tmp is not writable.
+            tool=/tmp/.hall-armory-bin
+            if [ -x "$tool/gh" ] || { mkdir -p "$tool" && cp ${gh}/bin/gh "$tool/gh.$$" && mv "$tool/gh.$$" "$tool/gh"; } 2>/dev/null; then
+              export PATH="$tool:$PATH"
+            else
+              export PATH=${gh}/bin:$PATH
+            fi
             exec node "$(dirname "$0")/../lib/runner.mjs" "$@"
             EOS
             chmod +x $out/bin/armory-suite
