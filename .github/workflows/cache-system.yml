@@ -20,6 +20,9 @@ permissions:
 jobs:
   build:
     runs-on: ${{ inputs.build-runner }}
+    # Only a pushing run uses the `cache` Environment, which is restricted to main
+    # and holds the Cachix write token. Pull requests build without credentials.
+    environment: ${{ inputs.push && 'cache' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@v19
