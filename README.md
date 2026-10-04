@@ -82,3 +82,17 @@ extra-trusted-public-keys = hall-armory.cachix.org-1:<public key from the cache 
 ```
 
 `scripts/cache-suite.sh <suite-path> <nix-system>` reproduces any CI build locally.
+
+## Artifact catalog
+
+`publish-artifacts.yml` releases `artifacts.json`, the resolved catalog, after every
+green `main` run that changed a suite: the git revision, the pinned cache identity
+(`cache.json`), each suite manifest, and per suite and guest system the exact store
+path, `narHash` and full closure. It is built with local builds forbidden, so a
+release exists only once its artifacts are fetchable from the cache.
+
+Clients read `releases/latest/download/artifacts.json` (or pin
+`releases/download/armory-<sha>/artifacts.json`) and fetch the closure by store path
+with `nix copy`, with no flake evaluation. If the release is unreachable they fall
+back to evaluating the flake. Enable immutable releases in the repository settings
+so a published catalog can never be altered.

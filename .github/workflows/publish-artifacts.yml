@@ -1,0 +1,82 @@
+name: Publish artifact catalog
+
+# Releases the resolved, immutable catalog (artifacts.json): the exact store paths
+# and closures of every suite for every guest system, plus the suite manifests, at
+# one git revision. A release exists only after the artifacts are in the binary
+# cache and fetchable (the document is built with local builds forbidden), so a
+# client that resolves the latest release never asks for a path that is not
+# there. Clients read
+#   https://github.com/<repo>/releases/latest/download/artifacts.json
+# or pin a revision with .../releases/download/armory-<sha>/artifacts.json.
+
+on:
+  workflow_run:
+    workflows: ["Test affected packages"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - lib/artifacts.mjs
+      - scripts/publish-artifacts.mjs
+      - cache.json
+      - .github/workflows/publish-artifacts.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: armory-artifacts
+  cancel-in-progress: false
+
+jobs:
+  # Pull requests: prove the publisher builds and validates, for the runner's own
+  # system only. Nothing is released.
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v19
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/publish-artifacts.mjs --repo "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" --local --allow-build --systems x86_64-linux >/dev/null
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REVISION: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REVISION }}
+      - uses: DeterminateSystems/nix-installer-action@v19
+      - uses: cachix/cachix-action@v17
+        with:
+          name: ${{ vars.CACHIX_CACHE_NAME }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch the previous catalog
+        run: gh release download --pattern artifacts.json --output previous.json || true
+      - name: Build the document from the cache only
+        id: document
+        run: |
+          set +e
+          node scripts/publish-artifacts.mjs --repo "$GITHUB_REPOSITORY" --revision "$REVISION" --previous previous.json > artifacts.json
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 0 ] || [ "$code" = 3 ]
+      - name: Release
+        if: steps.document.outputs.code == '0'
+        run: |
+          if gh release view "armory-$REVISION" >/dev/null 2>&1; then echo "Release armory-$REVISION already exists."; exit 0; fi
+          gh release create "armory-$REVISION" artifacts.json \
+            --target "$REVISION" --latest \
+            --title "Armory catalog ${REVISION::12}" \
+            --notes "Resolved artifact catalog for $REVISION. Every artifact was verified fetchable from the binary cache before this release was created."
