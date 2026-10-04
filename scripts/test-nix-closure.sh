@@ -10,7 +10,8 @@ closure_path="$package_path/${closure#./}"
 [ -f "$closure_path/flake.lock" ] || { echo "Missing Nix lock: $closure_path" >&2; exit 1; }
 
 nix flake check "path:$closure_path"
-nix build --no-link "path:$closure_path#default"
+out=$(nix build --no-link --print-out-paths "path:$closure_path#default")
+bash "$(dirname "$0")/check-closure.sh" "$out"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 printf '{"operations":[]}' > "$tmp/input.json"

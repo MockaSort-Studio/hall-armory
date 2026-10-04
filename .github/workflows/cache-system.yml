@@ -29,6 +29,8 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: ${{ !inputs.push }}
       - run: bash scripts/cache-suite.sh "${{ inputs.package }}" "${{ inputs.system }}"
+      - name: Run on a stand-in for the Gondolin guest (Alpine/musl, Node 24)
+        run: bash scripts/test-guest-compat.sh "${{ inputs.package }}" "${{ inputs.system }}"
 
   # --max-jobs 0 forbids local builds, so this fails unless the cache holds the
   # complete closure; the flake reference is the one a Hall client uses.
