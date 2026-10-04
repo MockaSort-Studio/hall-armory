@@ -11,12 +11,7 @@ closure_path="$package_path/${closure#./}"
 
 nix flake check "path:$closure_path"
 out=$(nix build --no-link --print-out-paths "path:$closure_path#default")
-# Guard the closure size: suites ship only what the guest lacks (see
-# docs/guest-baseline.md). A regression that pulls a runtime back in fails here.
-max_mb=${SUITE_MAX_CLOSURE_MB:-100}
-size_mb=$(nix path-info -r --json --json-format 1 "$out" | jq '[.[].narSize] | add / 1000000 | floor')
-echo "closure: ${size_mb} MB (limit ${max_mb} MB)"
-[ "$size_mb" -le "$max_mb" ] || { echo "Closure exceeds ${max_mb} MB" >&2; exit 1; }
+bash "$(dirname "$0")/check-closure.sh" "$out"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 printf '{"operations":[]}' > "$tmp/input.json"
