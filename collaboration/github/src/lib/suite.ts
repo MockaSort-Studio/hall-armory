@@ -7,6 +7,7 @@ import { issueOperationDescriptors } from "./issues/tools.ts";
 import { labelOperationDescriptors } from "./labels/tools.ts";
 import { projectOperationDescriptors } from "./projects/tools.ts";
 import { pullRequestOperationDescriptors } from "./pulls/tools.ts";
+import { workflowOperationDescriptors } from "./workflows/tools.ts";
 import {
   registerOperations,
   type OperationDescriptor,
@@ -21,6 +22,7 @@ export function githubOperationDescriptors(): OperationDescriptor[] {
     ...labelOperationDescriptors(),
     ...projectOperationDescriptors(),
     ...pullRequestOperationDescriptors(),
+    ...workflowOperationDescriptors(),
   ];
 }
 
