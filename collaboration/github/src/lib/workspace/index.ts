@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { gh } from "../core/gh.ts";
 
 const exec = promisify(execFile);
 const WORKSPACE = "/workspace";
@@ -13,19 +13,26 @@ function repository(repo: string) {
     throw new Error(`Invalid repository: ${repo}`);
   return { owner, name };
 }
-
 function revision(value: string) {
   if (!value || value.length > 255 || /[\0\r\n]/.test(value))
     throw new Error("Invalid repository revision");
   return value;
 }
-
 async function emptyWorkspace(run = exec) {
   const { stdout } = await run("/bin/sh", [
     "-lc",
     `find ${WORKSPACE} -mindepth 1 -maxdepth 1 ! -name node_modules -print -quit`,
   ]);
   if (stdout.trim()) throw new Error("Guest workspace is not empty");
+}
+async function downloadArchive(args, destination) {
+  const { stdout } = await exec("gh", args, {
+    encoding: "buffer",
+    maxBuffer: MAX_ARCHIVE_BYTES + 1,
+  });
+  if (!Buffer.isBuffer(stdout) || stdout.length > MAX_ARCHIVE_BYTES)
+    throw new Error("Repository archive exceeds the guest snapshot limit");
+  await writeFile(destination, stdout);
 }
 
 // A guest runner has a private /workspace mount. This operation deliberately
@@ -39,15 +46,17 @@ export async function snapshotRepository(
   const { owner, name } = repository(repo);
   const revisionValue = revision(revisionName);
   const run = dependencies.exec ?? exec;
+  const download = dependencies.download ?? downloadArchive;
   await emptyWorkspace(run);
   const archive = `/tmp/hall-github-snapshot-${randomUUID()}.tar.gz`;
   try {
-    await gh([
-      "api",
-      `repos/${owner}/${name}/tarball/${encodeURIComponent(revisionValue)}`,
-      "--output",
+    await download(
+      [
+        "api",
+        `repos/${owner}/${name}/tarball/${encodeURIComponent(revisionValue)}`,
+      ],
       archive,
-    ]);
+    );
     try {
       await run("/bin/sh", [
         "-lc",
