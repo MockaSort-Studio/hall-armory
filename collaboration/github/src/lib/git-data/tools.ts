@@ -51,8 +51,9 @@ export function gitDataOperationDescriptors(): OperationDescriptor[] {
         base: bounded(255),
         title: bounded(256),
         body: O(Type.String({ maxLength: 65_536 })),
+        draft: O(Type.Boolean()),
       }),
-      (x) => gitData.createPullRequest(x.repo, x.head, x.base, x.title, x.body),
+      (x) => gitData.createPullRequest(x.repo, x.head, x.base, x.title, x.body, x.draft),
     ),
   ];
 }
