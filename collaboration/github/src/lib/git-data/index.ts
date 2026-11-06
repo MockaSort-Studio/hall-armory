@@ -82,20 +82,24 @@ export async function createPullRequest(
   base: string,
   title: string,
   body?: string,
+  draft = false,
 ) {
+  const { owner, name } = parts(repo);
   const args = [
-    "pr",
-    "create",
-    "-R",
-    repo,
-    "--head",
-    head,
-    "--base",
-    base,
-    "--title",
-    title,
+    "api",
+    "--method",
+    "POST",
+    `repos/${owner}/${name}/pulls`,
+    "-f",
+    `title=${title}`,
+    "-f",
+    `head=${head}`,
+    "-f",
+    `base=${base}`,
+    "-F",
+    `draft=${draft}`,
   ];
-  if (body) args.push("--body", body);
-  const url = await gh(args);
-  return { repo, head, base, url };
+  if (body) args.push("-f", `body=${body}`);
+  const created = await ghJson(args);
+  return { repo, head, base, url: created?.html_url, number: created?.number, draft: Boolean(created?.draft) };
 }

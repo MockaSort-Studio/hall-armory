@@ -54,36 +54,40 @@ test("generic GitHub ref and file primitives use only caller-supplied repository
   );
 });
 
-test("generic pull request creation returns gh's URL without Crew semantics", async () => {
+test("generic pull request creation uses the GitHub API without a local Git checkout", async () => {
   const calls = [];
   const result = await withGithubCommandTransport(
     {
       run: async (args) => {
         calls.push(args);
-        return "https://github.test/pull/1";
+        return JSON.stringify({ html_url: "https://github.test/pull/1", number: 1, draft: true });
       },
     },
-    () => createPullRequest("owner/repo", "feature", "main", "Title", "Body"),
+    () => createPullRequest("owner/repo", "feature", "main", "Title", "Body", true),
   );
   assert.deepEqual(result, {
     repo: "owner/repo",
     head: "feature",
     base: "main",
     url: "https://github.test/pull/1",
+    number: 1,
+    draft: true,
   });
   assert.deepEqual(calls[0], [
-    "pr",
-    "create",
-    "-R",
-    "owner/repo",
-    "--head",
-    "feature",
-    "--base",
-    "main",
-    "--title",
-    "Title",
-    "--body",
-    "Body",
+    "api",
+    "--method",
+    "POST",
+    "repos/owner/repo/pulls",
+    "-f",
+    "title=Title",
+    "-f",
+    "head=feature",
+    "-f",
+    "base=main",
+    "-F",
+    "draft=true",
+    "-f",
+    "body=Body",
   ]);
 });
 
