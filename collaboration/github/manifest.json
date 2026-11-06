@@ -15,7 +15,10 @@
     "projects",
     "labels"
   ],
-  "native": { "closure": ".", "output": "guest" },
+  "native": {
+    "closure": ".",
+    "output": "guest"
+  },
   "network": {
     "allowedHosts": [
       "api.github.com",
@@ -26,7 +29,10 @@
     "credentials": [
       {
         "environment": "GITHUB_TOKEN",
-        "hosts": ["api.github.com", "github.com"]
+        "hosts": [
+          "api.github.com",
+          "github.com"
+        ]
       }
     ]
   },
@@ -73,6 +79,11 @@
     "github_workflow_run_view",
     "github_workflow_run_failed_log",
     "github_pull_request_create",
-    "github_workspace_snapshot"
+    "github_workspace_checkout",
+    "github_git_status",
+    "github_git_diff",
+    "github_git_stage",
+    "github_git_commit",
+    "github_git_push"
   ]
 }

@@ -42,14 +42,17 @@
             src = pkgs.lib.cleanSource ./.;
             npmDeps = pkgs.fetchNpmDeps {
               src = pkgs.lib.cleanSource ./guest-suite-build;
-              hash = "sha256-P1JSOTAE7wLU/MfqzJm07c7QeAqte1AHudR+CKOk6jY=";
+              hash = "sha256-4NG8vupy5Tb1kz+E6hOlrlBeS2VeAFg+9FZwRzZXy64=";
             };
             postPatch = ''
               cp guest-suite-build/package.json guest-suite-build/package-lock.json .
             '';
             dontNpmBuild = true;
             buildPhase = ''
-              ${pkgs.esbuild}/bin/esbuild guest-suite-build/runner.ts --bundle --platform=node --target=node22 --format=esm --outfile=runner.mjs
+              # Bundled CommonJS dependencies (isomorphic-git) require Node builtins; an ESM
+              # bundle has no `require`, so the banner provides one.
+              ${pkgs.esbuild}/bin/esbuild guest-suite-build/runner.ts --bundle --platform=node --target=node22 --format=esm --outfile=runner.mjs \
+                '--banner:js=import { createRequire } from "node:module"; const require = createRequire(import.meta.url);'
             '';
             installPhase = ''
               mkdir -p $out/lib

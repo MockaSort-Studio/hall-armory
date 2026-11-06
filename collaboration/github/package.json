@@ -1,6 +1,6 @@
 {
   "name": "@mockasort-studio/pi-github-tools",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "GitHub CLI tools for Pi coding agent extensions.",
   "license": "GPL-3.0-only",
   "type": "module",
@@ -30,5 +30,9 @@
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
+  },
+  "dependencies": {
+    "diff": "9.0.0",
+    "isomorphic-git": "1.44.11"
   }
 }
