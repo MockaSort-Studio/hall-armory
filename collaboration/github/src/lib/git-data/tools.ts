@@ -8,6 +8,7 @@ import {
 
 const S = Type.String;
 const O = Type.Optional;
+const bounded = (maxLength) => Type.String({ minLength: 1, maxLength });
 const obj = (properties) => Type.Object(properties);
 
 export function gitDataOperationDescriptors(): OperationDescriptor[] {
@@ -15,19 +16,21 @@ export function gitDataOperationDescriptors(): OperationDescriptor[] {
     operation(
       "github_ref_create",
       "Create a repository branch reference from an existing commit SHA.",
-      obj({ repo: S(), branch: S(), sha: S() }),
+      obj({ repo: bounded(256), branch: bounded(255), sha: bounded(64) }),
       (x) => gitData.createBranch(x.repo, x.branch, x.sha),
     ),
     operation(
       "github_file_update",
       "Create or update one UTF-8 repository file on a branch through the GitHub API.",
       obj({
-        repo: S(),
-        branch: S(),
-        path: S(),
-        content: S(),
-        message: S(),
-        sha: O(S()),
+        repo: bounded(256),
+        branch: bounded(255),
+        path: bounded(1024),
+        // GitHub's Contents API accepts at most 1 MiB. Keep room for base64
+        // expansion and command arguments rather than relying on host limits.
+        content: bounded(700_000),
+        message: bounded(512),
+        sha: O(bounded(64)),
       }),
       (x) =>
         gitData.updateFile(
@@ -42,7 +45,13 @@ export function gitDataOperationDescriptors(): OperationDescriptor[] {
     operation(
       "github_pull_request_create",
       "Create a pull request from one repository branch to another.",
-      obj({ repo: S(), head: S(), base: S(), title: S(), body: O(S()) }),
+      obj({
+        repo: bounded(256),
+        head: bounded(255),
+        base: bounded(255),
+        title: bounded(256),
+        body: O(Type.String({ maxLength: 65_536 })),
+      }),
       (x) => gitData.createPullRequest(x.repo, x.head, x.base, x.title, x.body),
     ),
   ];

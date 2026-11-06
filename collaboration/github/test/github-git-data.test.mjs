@@ -6,6 +6,7 @@ import {
   createPullRequest,
   updateFile,
 } from "../src/lib/git-data/index.ts";
+import { gitDataOperationDescriptors } from "../src/lib/git-data/tools.ts";
 
 test("generic GitHub ref and file primitives use only caller-supplied repository state", async () => {
   const calls = [];
@@ -84,6 +85,17 @@ test("generic pull request creation returns gh's URL without Crew semantics", as
     "--body",
     "Body",
   ]);
+});
+
+test("write descriptors bound content before it reaches gh", () => {
+  const fileUpdate = gitDataOperationDescriptors().find(
+    (item) => item.name === "github_file_update",
+  );
+  assert.equal(fileUpdate.parameters.properties.content.maxLength, 700_000);
+  const pullCreate = gitDataOperationDescriptors().find(
+    (item) => item.name === "github_pull_request_create",
+  );
+  assert.equal(pullCreate.parameters.properties.body.maxLength, 65_536);
 });
 
 test("generic GitHub primitives reject malformed repository paths and refs", async () => {
