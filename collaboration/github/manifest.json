@@ -3,8 +3,8 @@
   "extension": "pi-github-tools",
   "package": {
     "name": "@mockasort-studio/pi-github-tools",
-    "version": "0.1.7",
-    "integrity": "sha512-LoOR47JCHBftn6p/TETkhw4XTiKGzg8gnvgx6GLIELGE317HoL5QqqGxX4kwMAF1MNH2Qp9iLAxQwPobLD1RLA=="
+    "version": "0.1.8",
+    "integrity": "sha512-BN4HJb9kNUc51wMXAoOhA73qLI/JWeLBJr+zc17tUatWlWYcjUzNRXjGDE0m4J6DYkqfdXgcwYMg/WaYHGDKnQ=="
   },
   "summary": "GitHub repository, issue, pull request, discussion, project, and label operations.",
   "capabilities": [
