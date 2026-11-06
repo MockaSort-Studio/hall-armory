@@ -8,11 +8,15 @@ import { labelOperationDescriptors } from "./labels/tools.ts";
 import { projectOperationDescriptors } from "./projects/tools.ts";
 import { pullRequestOperationDescriptors } from "./pulls/tools.ts";
 import { workflowOperationDescriptors } from "./workflows/tools.ts";
+import { gitDataOperationDescriptors } from "./git-data/tools.ts";
 import {
   registerOperations,
   type OperationDescriptor,
 } from "./core/tool-registration.ts";
-import { withGithubCommandTransport, type GithubCommandTransport } from "./core/gh.ts";
+import {
+  withGithubCommandTransport,
+  type GithubCommandTransport,
+} from "./core/gh.ts";
 
 export function githubOperationDescriptors(): OperationDescriptor[] {
   return [
@@ -23,16 +27,21 @@ export function githubOperationDescriptors(): OperationDescriptor[] {
     ...projectOperationDescriptors(),
     ...pullRequestOperationDescriptors(),
     ...workflowOperationDescriptors(),
+    ...gitDataOperationDescriptors(),
   ];
 }
 
 const registeredSuites = new WeakSet<object>();
 
-export function registerGithubSuite(pi, { transport }: { transport?: GithubCommandTransport } = {}) {
+export function registerGithubSuite(
+  pi,
+  { transport }: { transport?: GithubCommandTransport } = {},
+) {
   if (registeredSuites.has(pi)) return;
   const descriptors = githubOperationDescriptors().map((descriptor) => ({
     ...descriptor,
-    execute: (input) => withGithubCommandTransport(transport, () => descriptor.execute(input)),
+    execute: (input) =>
+      withGithubCommandTransport(transport, () => descriptor.execute(input)),
   }));
   registerOperations(pi, descriptors);
   registeredSuites.add(pi);
