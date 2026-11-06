@@ -38,6 +38,21 @@ test("repository snapshot uses a generic revision and fixed private guest worksp
   assert.ok(commands.some(([command]) => command === "/bin/rm"));
 });
 
+test("repository snapshot bounds archive size before extraction", async () => {
+  await assert.rejects(
+    () =>
+      withGithubCommandTransport({ run: async () => "" }, () =>
+        snapshotRepository("owner/repo", "main", {
+          exec: async (_command, args) => {
+            if (args.join(" ").includes("wc -c")) throw new Error("too large");
+            return { stdout: "", stderr: "" };
+          },
+        }),
+      ),
+    /snapshot limit/,
+  );
+});
+
 test("repository snapshot refuses nonempty workspaces and malformed revisions", async () => {
   await assert.rejects(
     () =>

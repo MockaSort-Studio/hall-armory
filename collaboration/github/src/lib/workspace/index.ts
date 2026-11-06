@@ -5,6 +5,7 @@ import { gh } from "../core/gh.ts";
 
 const exec = promisify(execFile);
 const WORKSPACE = "/workspace";
+const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
 
 function repository(repo: string) {
   const [owner, name, ...rest] = repo.split("/");
@@ -47,10 +48,20 @@ export async function snapshotRepository(
       "--output",
       archive,
     ]);
+    try {
+      await run("/bin/sh", [
+        "-lc",
+        `test $(wc -c < ${archive}) -le ${MAX_ARCHIVE_BYTES}`,
+      ]);
+    } catch {
+      throw new Error("Repository archive exceeds the guest snapshot limit");
+    }
     await run("/bin/tar", [
       "-xzf",
       archive,
       "--strip-components=1",
+      "--no-same-owner",
+      "--no-same-permissions",
       "-C",
       WORKSPACE,
     ]);
