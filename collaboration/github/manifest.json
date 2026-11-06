@@ -3,8 +3,8 @@
   "extension": "pi-github-tools",
   "package": {
     "name": "@mockasort-studio/pi-github-tools",
-    "version": "0.1.8",
-    "integrity": "sha512-BN4HJb9kNUc51wMXAoOhA73qLI/JWeLBJr+zc17tUatWlWYcjUzNRXjGDE0m4J6DYkqfdXgcwYMg/WaYHGDKnQ=="
+    "version": "0.1.9",
+    "integrity": "sha512-RvyYs7EKCV2ZnzbN34s5KorsqsUb0QMvFeLKP0C9hRkvc4PIpK0j7hMg5pA67VzJCKDGPUDhQybHXaWxAYlLJw=="
   },
   "summary": "GitHub repository, issue, pull request, discussion, project, and label operations.",
   "capabilities": [
@@ -17,7 +17,12 @@
   ],
   "native": { "closure": ".", "output": "guest" },
   "network": {
-    "allowedHosts": ["api.github.com", "github.com", "uploads.github.com"],
+    "allowedHosts": [
+      "api.github.com",
+      "github.com",
+      "uploads.github.com",
+      "codeload.github.com"
+    ],
     "credentials": [
       {
         "environment": "GITHUB_TOKEN",
@@ -69,6 +74,7 @@
     "github_workflow_run_failed_log",
     "github_ref_create",
     "github_file_update",
-    "github_pull_request_create"
+    "github_pull_request_create",
+    "github_workspace_snapshot"
   ]
 }

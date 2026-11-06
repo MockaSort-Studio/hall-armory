@@ -8,6 +8,7 @@ import { labelOperationDescriptors } from "./labels/tools.ts";
 import { projectOperationDescriptors } from "./projects/tools.ts";
 import { pullRequestOperationDescriptors } from "./pulls/tools.ts";
 import { workflowOperationDescriptors } from "./workflows/tools.ts";
+import { workspaceOperationDescriptors } from "./workspace/tools.ts";
 import { gitDataOperationDescriptors } from "./git-data/tools.ts";
 import {
   registerOperations,
@@ -27,6 +28,7 @@ export function githubOperationDescriptors(): OperationDescriptor[] {
     ...projectOperationDescriptors(),
     ...pullRequestOperationDescriptors(),
     ...workflowOperationDescriptors(),
+    ...workspaceOperationDescriptors(),
     ...gitDataOperationDescriptors(),
   ];
 }
