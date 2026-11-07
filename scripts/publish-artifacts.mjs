@@ -1,5 +1,6 @@
 // Emits artifacts.json (the resolved, immutable catalog) on stdout.
-//   publish-artifacts.mjs --repo OWNER/REPO --revision SHA [--previous FILE] [--local] [--allow-build] [--systems a,b]
+//   publish-artifacts.mjs --repo OWNER/REPO --revision SHA [--previous FILE] [--sources FILE] [--local] [--allow-build] [--systems a,b]
+// --sources is the JSON that bundle-extensions.mjs prints: each suite's extension source bundle and its hash.
 // Exit 3 when --previous already describes identical suites (nothing to release).
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -22,6 +23,7 @@ const document = validateArtifacts(
     local: flag("local"),
     allowBuild: flag("allow-build"),
     exec,
+    sources: flag("sources") ? JSON.parse(readFileSync(value("sources"), "utf8")) : {},
   }),
 );
 
