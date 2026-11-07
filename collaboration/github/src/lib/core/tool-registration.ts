@@ -5,14 +5,14 @@ export type OperationDescriptor = {
   name: string;
   description: string;
   parameters: unknown;
-  execute: (input: any) => Promise<unknown> | unknown;
+  execute: (input: any, context?: { signal?: AbortSignal }) => Promise<unknown> | unknown;
 };
 
 export function operation(
   name: string,
   description: string,
   parameters: unknown,
-  execute: (input: any) => Promise<unknown> | unknown,
+  execute: (input: any, context?: { signal?: AbortSignal }) => Promise<unknown> | unknown,
 ): OperationDescriptor {
   return { name, description, parameters, execute };
 }
@@ -31,8 +31,8 @@ export function registerOperations(pi, descriptors: OperationDescriptor[]) {
       label: descriptor.name.replaceAll("_", " "),
       description: descriptor.description,
       parameters: descriptor.parameters,
-      async execute(_id, input) {
-        return toolOutput(await descriptor.execute(input));
+      async execute(_id, input, signal) {
+        return toolOutput(await descriptor.execute(input, { signal }));
       },
     });
   }
