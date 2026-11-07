@@ -44,37 +44,18 @@ jobs:
       fail-fast: false
       matrix:
         package: ${{ fromJSON(needs.discover.outputs.packages) }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.22.2
-          registry-url: https://registry.npmjs.org
-          cache: npm
-      - uses: DeterminateSystems/nix-installer-action@v19
-      - run: npm ci
-      - id: version
-        name: Check npm package version
-        env:
-          ID: ${{ matrix.package.id }}
-          PACKAGE_PATH: ${{ matrix.package.path }}
-        run: |
-          version=$(jq -r .version "$PACKAGE_PATH/package.json")
-          if npm view "$ID@$version" version >/dev/null 2>npm-view.err; then
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "$ID@$version already exists on npm; skipping release."
-          elif grep -q 'E404' npm-view.err; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          else
-            cat npm-view.err >&2
-            exit 1
-          fi
-      - run: bash scripts/test-package.sh "${{ matrix.package.path }}"
-      - run: bash scripts/test-nix-closure.sh "${{ matrix.package.path }}"
-      - name: Verify staged publication
-        if: ${{ steps.version.outputs.publish == 'true' && github.event_name == 'workflow_dispatch' && !inputs.publish }}
-        run: npx --yes npm@12.1.0 stage publish "${{ matrix.package.path }}" --access public --dry-run
-      - name: Stage package for approval
-        if: ${{ steps.version.outputs.publish == 'true' && (github.event_name == 'push' || inputs.publish) }}
-        run: npx --yes npm@12.1.0 stage publish "${{ matrix.package.path }}" --access public
+    # Verifying a package, checking its version against npm and staging it for approval is shared with the
+    # other MockaSort packages: see MockaSort-Studio/actions (release-npm). A push stages; a manual run only
+    # stages when `publish` is true and otherwise performs a dry run.
+    permissions:
+      contents: read
+      id-token: write
+    uses: MockaSort-Studio/actions/.github/workflows/release-npm.yml@main
+    with:
+      package-path: ${{ matrix.package.path }}
+      mode: ${{ (github.event_name == 'push' || inputs.publish) && 'publish' || 'dry-run' }}
+      node-version: 22.22.2
+      setup-nix: "true"
+      test-command: |
+        bash scripts/test-package.sh "$PACKAGE_PATH"
+        bash scripts/test-nix-closure.sh "$PACKAGE_PATH"
