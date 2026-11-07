@@ -1,6 +1,7 @@
 import { Type } from "typebox";
 import * as pulls from "./index.ts";
 import * as reviews from "./reviews.ts";
+import * as checks from "./checks.ts";
 import {
   operation,
   registerOperations,
@@ -38,6 +39,24 @@ export function pullRequestOperationDescriptors(): OperationDescriptor[] {
       "Read pull-request check results.",
       obj({ repo: S(), pullNumber: I() }),
       (x) => reviews.listPullRequestChecks(x.repo, x.pullNumber),
+    ),
+    operation(
+      "github_pull_request_checks_wait",
+      "Wait until the checks of a pull request's current head commit finish, then return success or failure with failed-step log tails. Blocks without a deadline; cancel to stop. Pass `sha` (the commit just pushed) so a stale head is never reported.",
+      obj({
+        repo: S(),
+        pullNumber: I(),
+        sha: O(S()),
+        intervalSeconds: O(I({ minimum: 5, maximum: 120 })),
+        failFast: O(Type.Boolean()),
+      }),
+      (x, context) =>
+        checks.waitForPullRequestChecks(x.repo, x.pullNumber, {
+          sha: x.sha,
+          intervalSeconds: x.intervalSeconds,
+          failFast: x.failFast,
+          signal: context?.signal,
+        }),
     ),
     operation(
       "github_pull_request_review_threads",
