@@ -2,7 +2,8 @@ name: Publish artifact catalog
 
 # Releases the resolved, immutable catalog (artifacts.json): the exact store paths
 # and closures of every suite for every guest system, plus the suite manifests, at
-# one git revision. A release exists only after the artifacts are in the binary
+# one git revision. Each suite's self-contained extension source bundle is attached
+# to the same release and pinned in the catalog by its sha256. A release exists only after the artifacts are in the binary
 # cache and fetchable (the document is built with local builds forbidden), so a
 # client that resolves the latest release never asks for a path that is not
 # there. Clients read
@@ -41,7 +42,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node scripts/publish-artifacts.mjs --repo "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" --local --allow-build --systems x86_64-linux >/dev/null
+      - run: npm ci
+      - run: node scripts/bundle-extensions.mjs --out bundles > sources.json
+      - run: node scripts/publish-artifacts.mjs --repo "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" --local --allow-build --systems x86_64-linux --sources sources.json >/dev/null
 
   publish:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
@@ -62,13 +65,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Bundle the extension sources
+        run: |
+          npm ci
+          node scripts/bundle-extensions.mjs --out bundles > sources.json
       - name: Fetch the previous catalog
         run: gh release download --pattern artifacts.json --output previous.json || true
       - name: Build the document from the cache only
         id: document
         run: |
           set +e
-          node scripts/publish-artifacts.mjs --repo "$GITHUB_REPOSITORY" --revision "$REVISION" --previous previous.json > artifacts.json
+          node scripts/publish-artifacts.mjs --repo "$GITHUB_REPOSITORY" --revision "$REVISION" --previous previous.json --sources sources.json > artifacts.json
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
           [ "$code" = 0 ] || [ "$code" = 3 ]
@@ -76,7 +83,7 @@ jobs:
         if: steps.document.outputs.code == '0'
         run: |
           if gh release view "armory-$REVISION" >/dev/null 2>&1; then echo "Release armory-$REVISION already exists."; exit 0; fi
-          gh release create "armory-$REVISION" artifacts.json \
+          gh release create "armory-$REVISION" artifacts.json bundles/*.mjs \
             --target "$REVISION" --latest \
             --title "Armory catalog ${REVISION::12}" \
             --notes "Resolved artifact catalog for $REVISION. Every artifact was verified fetchable from the binary cache before this release was created."

@@ -71,3 +71,20 @@ test("identical suites need no new release", () => {
   b.suites["collaboration/pi-github-tools"].systems["x86_64-linux"].storePath = `/nix/store/${hash("d")}-suite`;
   assert.equal(suitesUnchanged(a, b), false);
 });
+
+test("the extension source bundle is recorded per suite and validated", () => {
+  const sources = { "collaboration/pi-github-tools": { file: "collaboration-pi-github-tools.mjs", sha256: "a".repeat(64), size: 1234 } };
+  const doc = validateArtifacts(buildArtifacts({ root, repo: "o/r", revision, cache, exec: fakeNix([]), sources }));
+  assert.deepEqual(doc.suites["collaboration/pi-github-tools"].source, sources["collaboration/pi-github-tools"]);
+  const mutate = (change) => {
+    const bad = buildArtifacts({ root, repo: "o/r", revision, cache, exec: fakeNix([]), sources: structuredClone(sources) });
+    change(bad.suites["collaboration/pi-github-tools"].source);
+    return () => validateArtifacts(bad);
+  };
+  assert.throws(mutate((s) => (s.file = "../evil.mjs")), /bad source bundle/);
+  assert.throws(mutate((s) => (s.file = "bundle.js")), /bad source bundle/);
+  assert.throws(mutate((s) => (s.sha256 = "xyz")), /bad source bundle/);
+  assert.throws(mutate((s) => (s.size = 0)), /bad source bundle/);
+  assert.throws(mutate((s) => (s.size = 9 * 1024 * 1024)), /bad source bundle/);
+  assert.equal(suitesUnchanged(doc, buildArtifacts({ root, repo: "o/r", revision, cache, exec: fakeNix([]) })), false, "a changed bundle is a new release");
+});

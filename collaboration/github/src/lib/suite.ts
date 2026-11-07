@@ -18,6 +18,10 @@ import {
   withGithubCommandTransport,
   type GithubCommandTransport,
 } from "./core/gh.ts";
+import {
+  withWorkspaceBackend,
+  type WorkspaceBackend,
+} from "./workspace/backend.ts";
 
 export function githubOperationDescriptors(): OperationDescriptor[] {
   return [
@@ -37,13 +41,18 @@ const registeredSuites = new WeakSet<object>();
 
 export function registerGithubSuite(
   pi,
-  { transport }: { transport?: GithubCommandTransport } = {},
+  {
+    transport,
+    workspace,
+  }: { transport?: GithubCommandTransport; workspace?: WorkspaceBackend } = {},
 ) {
   if (registeredSuites.has(pi)) return;
   const descriptors = githubOperationDescriptors().map((descriptor) => ({
     ...descriptor,
     execute: (input) =>
-      withGithubCommandTransport(transport, () => descriptor.execute(input)),
+      withWorkspaceBackend(workspace, () =>
+        withGithubCommandTransport(transport, () => descriptor.execute(input)),
+      ),
   }));
   registerOperations(pi, descriptors);
   registeredSuites.add(pi);
