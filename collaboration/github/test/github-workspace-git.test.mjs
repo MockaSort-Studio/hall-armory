@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import * as isoGit from "isomorphic-git";
 import * as workspace from "../src/lib/workspace/git.ts";
+import { remoteTip } from "../src/lib/workspace/git.ts";
 import { workspaceOperationDescriptors } from "../src/lib/workspace/tools.ts";
 import { registerGithubSuite } from "../src/lib/suite.ts";
 
@@ -288,6 +289,7 @@ test("every operation is idempotent: repeating a call reaches the same state and
   );
 
   const sent = [];
+  // The real shape: remote refs are a tree split on "/", so a slash branch is nested.
   const git = (remote) => ({
     ...(isoGit.default ?? isoGit),
     getRemoteInfo: async () => ({ refs: { heads: remote } }),
@@ -298,7 +300,7 @@ test("every operation is idempotent: repeating a call reaches the same state and
   assert.equal(sent.length, 1, "the first push sends the commit");
   const repeat = await workspace.push(repo, "crew/run/dev", {
     dir,
-    git: git({ "crew/run/dev": made.commit }),
+    git: git({ crew: { run: { dev: made.commit } } }),
     env: envT,
   });
   assert.deepEqual(repeat, {
@@ -329,4 +331,13 @@ test("the suite acts on an injected workspace backend, not on the process filesy
   assert.equal(result.branch, "crew/run/dev");
   assert.ok(used.size > 0, "the injected fs was used");
   assert.equal(run(dir, "symbolic-ref", "HEAD"), "refs/heads/crew/run/dev");
+});
+
+test("the remote tip is read from isomorphic-git's nested ref tree, for flat and slash branches", () => {
+  const info = { refs: { heads: { main: "aaa", crew: { run: { dev: "bbb" } } } } };
+  assert.equal(remoteTip(info, "main"), "aaa");
+  assert.equal(remoteTip(info, "crew/run/dev"), "bbb");
+  assert.equal(remoteTip(info, "crew/run"), undefined, "a directory node is not a tip");
+  assert.equal(remoteTip(info, "crew/run/other"), undefined);
+  assert.equal(remoteTip({ refs: {} }, "main"), undefined);
 });

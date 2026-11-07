@@ -282,6 +282,12 @@ export async function commit(
   return { repo, branch, commit: oid };
 }
 
+// isomorphic-git reports remote refs as a tree split on "/" (heads.crew.run.dev), not a flat map.
+export const remoteTip = (info: any, name: string) => {
+  const tip = name.split("/").reduce((node, part) => node?.[part], info?.refs?.heads);
+  return typeof tip === "string" ? tip : undefined;
+};
+
 // Pushes the checked-out branch to the same-named remote branch, fast-forward only. When the remote already
 // has this exact commit nothing is sent and the result says so.
 export async function push(
@@ -300,7 +306,7 @@ export async function push(
   const url = remoteUrl(repo);
   const head = await headOf(ctx);
   const info = await ctx.git.getRemoteInfo({ http: ctx.http, url, onAuth });
-  if (info?.refs?.heads?.[name] === head)
+  if (remoteTip(info, name) === head)
     return { repo, branch: name, commit: head, upToDate: true };
   const result = await ctx.git.push({
     fs: ctx.fs,
