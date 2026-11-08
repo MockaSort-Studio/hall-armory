@@ -42,7 +42,7 @@
             src = pkgs.lib.cleanSource ./.;
             npmDeps = pkgs.fetchNpmDeps {
               src = pkgs.lib.cleanSource ./guest-suite-build;
-              hash = "sha256-FmIH4kge5ZfHt7X+jc5eGAV/u99TWENnyYvlxLkPwyY=";
+              hash = "sha256-JvTcnhhw3D8PM6qSFmmiKrP3gb+b7hgBfPVfdheOzlY=";
             };
             postPatch = ''
               cp guest-suite-build/package.json guest-suite-build/package-lock.json .
