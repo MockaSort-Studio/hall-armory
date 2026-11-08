@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { withGithubCommandTransport } from "../src/lib/core/gh.ts";
+import installGithubExtension, { activateSuite } from "../src/index.ts";
+import { gh, withGithubCommandTransport } from "../src/lib/core/gh.ts";
 import { summarizeChecks, waitForPullRequestChecks } from "../src/lib/pulls/checks.ts";
 import { pullRequestOperationDescriptors } from "../src/lib/pulls/tools.ts";
 
@@ -93,4 +94,53 @@ test("the suite exposes the operation and passes the abort signal to it", async 
   controller.abort();
   const transport = { run: () => JSON.stringify(pr([run("t", "IN_PROGRESS", null)])) };
   await assert.rejects(withGithubCommandTransport(transport, () => descriptor.execute({ repo: "o/r", pullNumber: 7 }, { signal: controller.signal })), /Cancelled/);
+});
+
+test("a requested sha that never becomes the head returns stale with the current head after the grace period", async () => {
+  const w = world([pr([run("test", "IN_PROGRESS", null)], { headRefOid: "newer" })]);
+  const result = await w.wait({ sha: "pushed", noChecksGraceSeconds: 45, intervalSeconds: 15 });
+  assert.equal(result.state, "stale");
+  assert.equal(result.requestedSha, "pushed");
+  assert.equal(result.headSha, "newer", "the caller can re-target the current head");
+  assert.equal(result.waitedSeconds, 45);
+  assert.deepEqual(w.sleeps, [15000, 15000, 15000]);
+});
+
+test("through an injected suite, aborting the tool call's signal rejects the wait", { timeout: 3000 }, async () => {
+  const tools = new Map();
+  let polled = 0;
+  activateSuite({ registerTool: (tool) => tools.set(tool.name, tool) }, {
+    commandTransport: { run: () => (polled++, JSON.stringify(pr([], { headRefOid: "newer" }))) },
+  });
+  const controller = new AbortController();
+  const pending = tools.get("github_pull_request_checks_wait").execute("call", { repo: "o/r", pullNumber: 7, sha: "pushed", intervalSeconds: 5 }, controller.signal);
+  setTimeout(() => controller.abort(), 20);
+  await assert.rejects(pending, /Cancelled while waiting for checks/);
+  assert.equal(polled, 1);
+});
+
+test("an abort while a GitHub call is in flight rejects even if the transport never answers", { timeout: 3000 }, async () => {
+  const tools = new Map();
+  let seen;
+  activateSuite({ registerTool: (tool) => tools.set(tool.name, tool) }, {
+    commandTransport: { run: (_args, options) => { seen = options.signal; return new Promise(() => {}); } },
+  });
+  const controller = new AbortController();
+  const pending = tools.get("github_pull_request_checks_wait").execute("call", { repo: "o/r", pullNumber: 7 }, controller.signal);
+  setTimeout(() => controller.abort(), 20);
+  await assert.rejects(pending, /Cancelled while waiting for checks/);
+  assert.equal(seen, controller.signal);
+});
+
+test("the non-injected installation forwards the signal too and leaves host gh options unchanged", async () => {
+  const tools = new Map();
+  installGithubExtension({ registerTool: (tool) => tools.set(tool.name, tool) });
+  const controller = new AbortController();
+  controller.abort();
+  // Already aborted: the wait rejects before any host `gh` runs.
+  await assert.rejects(tools.get("github_pull_request_checks_wait").execute("call", { repo: "o/r", pullNumber: 7 }, controller.signal), /Cancelled while waiting for checks/);
+  const seen = [];
+  const out = await gh(["issue", "view", "7"], {}, { execFileSync: (file, args, options) => (seen.push([file, args, options]), " ok \n") });
+  assert.equal(out, "ok");
+  assert.deepEqual(seen, [["gh", ["issue", "view", "7"], { encoding: "utf8" }]]);
 });

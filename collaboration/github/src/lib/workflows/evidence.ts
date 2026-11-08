@@ -284,7 +284,7 @@ export async function artifactEvidence(input: EvidenceInput, signal?: AbortSigna
   const limits = { maxEntries: LIMITS.maxEntries, maxEntryBytes: LIMITS.maxEntryBytes };
   try {
     if (input.artifactPath === undefined) {
-      const entries = listArchive(bytes, limits).filter((entry) => !entry.directory);
+      const entries = (await listArchive(bytes, limits)).filter((entry) => !entry.directory);
       return result(input, "ok", {
         source: "artifact",
         artifact: summary,
@@ -294,7 +294,7 @@ export async function artifactEvidence(input: EvidenceInput, signal?: AbortSigna
         truncated: entries.length > LIMITS.maxListedEntries,
       });
     }
-    const content = readArchiveEntry(bytes, input.artifactPath, limits);
+    const content = await readArchiveEntry(bytes, input.artifactPath, limits);
     if (!content) return result(input, "missing", { artifact: summary, integrity, reason: `the artifact has no file ${JSON.stringify(input.artifactPath)}` });
     const text = decodeText(content);
     if (text === undefined) return result(input, "malformed", { artifact: summary, integrity, path: input.artifactPath, reason: "the file is not UTF-8 text" });
