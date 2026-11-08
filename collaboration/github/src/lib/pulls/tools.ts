@@ -42,7 +42,7 @@ export function pullRequestOperationDescriptors(): OperationDescriptor[] {
     ),
     operation(
       "github_pull_request_checks_wait",
-      "Wait until the checks of a pull request's current head commit finish, then return success or failure with failed-step log tails. Blocks without a deadline; cancel to stop. Pass `sha` (the commit just pushed) so a stale head is never reported.",
+      "Wait until the checks of a pull request's current head commit finish, then return success or failure with failed-step log tails. Blocks without a deadline; cancel to stop. Pass `sha` (the commit just pushed) so a stale head is never reported; if that commit is still not the head after the grace period, returns `stale` with the current `headSha`.",
       obj({
         repo: S(),
         pullNumber: I(),
