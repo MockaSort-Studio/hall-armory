@@ -13,7 +13,8 @@ export function listWorkflowRuns(repo: string, workflow?: string, limit = 20) {
 export async function viewWorkflowRun(repo: string, runId: number, options: { artifacts?: boolean; signal?: AbortSignal } = {}) {
   const run = await ghJson(["run", "view", String(runId), "-R", repo, "--json", "databaseId,name,status,conclusion,workflowName,headBranch,headSha,event,createdAt,updatedAt,url,jobs"], options.signal ? { signal: options.signal } : {});
   if (!options.artifacts) return run;
-  return { ...run, artifacts: await listRunArtifacts(repo, runId, options.signal) };
+  const { artifacts, capped } = await listRunArtifacts(repo, runId, options.signal);
+  return { ...run, artifacts, ...(capped ? { artifactsTruncated: true } : {}) };
 }
 
 export async function failedWorkflowRunLog(repo: string, runId: number, maxChars = 12_000, signal?: AbortSignal) {

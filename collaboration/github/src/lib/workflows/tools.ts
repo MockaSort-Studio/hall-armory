@@ -13,7 +13,7 @@ export function workflowOperationDescriptors(): OperationDescriptor[] {
     ),
     operation(
       "github_workflow_run_failed_log",
-      "Read a bounded failed-step log tail for one workflow run. Evidence options select instead: `jobId`/`step` (default: the first failed job and step) paged by `startLine`/`maxLines` from the first error, or with `artifactId`/`artifactName` the file list or one `artifactPath` text file of a completed run's artifact. Results carry `state` (ok, running, unavailable, expired, missing, oversized, malformed) and a `continuation` when truncated.",
+      "Read a bounded failed-step log tail for one workflow run. Evidence options select instead: `jobId`/`step` (default: the first failed job and step) paged by `startLine`/`maxLines` from the first error, or with `artifactId`/`artifactName` the file list or one `artifactPath` text file of a completed run's artifact. For an artifact file list, `startLine`/`maxLines` count entries. Results carry `state` (ok, running, unavailable, expired, missing, oversized, malformed) and, when truncated, a `continuation` (`startLine`, plus `startChar` inside an over-long line) to pass back.",
       Type.Object({
         repo: S(),
         runId: I({ minimum: 1 }),
@@ -22,6 +22,7 @@ export function workflowOperationDescriptors(): OperationDescriptor[] {
         step: O(I({ minimum: 1, maximum: 1000 })),
         firstFailure: O(Type.Boolean()),
         startLine: O(I({ minimum: 1 })),
+        startChar: O(I({ minimum: 0, maximum: 4194304 })),
         maxLines: O(I({ minimum: 1, maximum: 2000 })),
         artifactId: O(I({ minimum: 1 })),
         artifactName: O(S({ minLength: 1, maxLength: 256 })),

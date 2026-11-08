@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { GithubCancelledError, GithubOversizedError, gh, ghBytes, ghJson } from "../core/gh.ts";
+import { GithubCancelledError, GithubOversizedError, gh, ghBytes, ghJson, httpStatusOf, redact } from "../core/gh.ts";
 import { ArchiveError, listArchive, readArchiveEntry } from "./artifact-zip.ts";
 
 // Failure evidence of one authorized workflow run: a selected job or step log, paged by line from its first error,
@@ -33,13 +33,14 @@ export type EvidenceInput = {
   step?: number;
   firstFailure?: boolean;
   startLine?: number;
+  startChar?: number;
   maxLines?: number;
   artifactId?: number;
   artifactName?: string;
   artifactPath?: string;
 };
 
-export const EVIDENCE_OPTIONS = ["jobId", "step", "firstFailure", "startLine", "maxLines", "artifactId", "artifactName", "artifactPath"] as const;
+export const EVIDENCE_OPTIONS = ["jobId", "step", "firstFailure", "startLine", "startChar", "maxLines", "artifactId", "artifactName", "artifactPath"] as const;
 export const wantsEvidence = (input: Record<string, unknown>) => EVIDENCE_OPTIONS.some((key) => input[key] !== undefined);
 
 class InvalidInput extends Error {
@@ -64,6 +65,9 @@ export function validateEvidenceInput(input: EvidenceInput) {
   positive(input.step, "step", 1_000);
   positive(input.startLine, "startLine");
   positive(input.maxLines, "maxLines", LIMITS.maxLines);
+  if (input.startChar !== undefined && (!Number.isInteger(input.startChar) || input.startChar < 0 || input.startChar > LIMITS.maxEntryBytes))
+    throw new InvalidInput(`startChar must be an integer from 0 to ${LIMITS.maxEntryBytes}`);
+  if (input.startChar !== undefined && input.startLine === undefined) throw new InvalidInput("startChar needs startLine");
   positive(input.artifactId, "artifactId");
   if (input.firstFailure !== undefined && typeof input.firstFailure !== "boolean") throw new InvalidInput("firstFailure must be a boolean");
   if (input.artifactName !== undefined && (typeof input.artifactName !== "string" || !input.artifactName || input.artifactName.length > 256))
@@ -80,13 +84,16 @@ export function validateEvidenceInput(input: EvidenceInput) {
 const result = (input: EvidenceInput, state: EvidenceState, extra: Record<string, unknown> = {}) => ({ repo: input.repo, runId: input.runId, state, ...extra });
 
 // A GitHub failure becomes an evidence state; cancellation and anything unexpected stay errors.
-function classify(error: any): { state: EvidenceState; reason: string } {
+// The HTTP status comes from the error or from `gh`'s own output: a synchronous `gh` failure carries its exit code
+// in `status`, never the HTTP status.
+function classify(error: any): { state: EvidenceState; reason: string; status?: number } {
   if (error instanceof GithubCancelledError) throw error;
   if (error instanceof GithubOversizedError) return { state: "oversized", reason: error.message };
-  if (error?.status === 410) return { state: "expired", reason: "GitHub reports the evidence has expired (HTTP 410)" };
-  if (error?.status === 404) return { state: "unavailable", reason: "GitHub has no such evidence (HTTP 404)" };
+  const status = httpStatusOf(error);
+  if (status === 410) return { state: "expired", reason: "GitHub reports the evidence has expired (HTTP 410)", status };
+  if (status === 404) return { state: "unavailable", reason: "GitHub has no such evidence (HTTP 404)", status };
   if (error instanceof SyntaxError || error?.cause instanceof SyntaxError) return { state: "malformed", reason: "GitHub returned malformed JSON" };
-  return { state: "unavailable", reason: String(error?.message ?? error) };
+  return { state: "unavailable", reason: redact(String(error?.message ?? error)), status };
 }
 
 async function bindRun(input: EvidenceInput, signal?: AbortSignal) {
@@ -97,11 +104,12 @@ async function bindRun(input: EvidenceInput, signal?: AbortSignal) {
     if (owner && owner.toLowerCase() !== input.repo.toLowerCase()) return { failure: result(input, "missing", { reason: `run ${input.runId} is not in ${input.repo}` }) };
     return { run };
   } catch (error) {
-    const { state, reason } = classify(error);
-    return { failure: result(input, state === "unavailable" && (error as any)?.status === 404 ? "missing" : state, { reason }) };
+    const { state, reason, status } = classify(error);
+    return { failure: result(input, status === 404 ? "missing" : state, { reason }) };
   }
 }
 
+// Lists every page until a short page; `capped` reports that the page limit was reached before the end.
 async function pages(input: EvidenceInput, path: string, key: string, signal?: AbortSignal) {
   const items = [];
   for (let page = 1; page <= LIMITS.maxPages; page++) {
@@ -109,25 +117,26 @@ async function pages(input: EvidenceInput, path: string, key: string, signal?: A
     const batch = body?.[key];
     if (!Array.isArray(batch)) throw new SyntaxError(`GitHub returned no ${key} list`);
     items.push(...batch);
-    if (batch.length < 100 || items.length >= (body.total_count ?? 0)) return items;
+    if (batch.length < 100) return { items, capped: false };
   }
-  return items;
+  return { items, capped: true };
 }
 
 const sanitize = (line: string) => line.replace(/\u001b\[[0-9;?]*[A-Za-z]/g, "").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "\uFFFD");
 
-// One page of lines: at most `maxLines` lines and `maxChars` characters, with an explicit continuation.
-export function page(lines: string[], start: number, maxLines: number, maxChars: number) {
+// One page of lines: at most `maxLines` lines and `maxChars` characters, with an explicit continuation. A line
+// longer than the budget is returned in pieces: the continuation then carries `startChar` within that line.
+export function page(lines: string[], start: number, maxLines: number, maxChars: number, startChar = 0) {
   const totalLines = lines.length;
   const out: string[] = [];
-  let chars = 0, lineTruncated = false, index = start - 1;
+  let chars = 0, index = start - 1, cut: number | undefined;
   for (; index < totalLines && out.length < maxLines; index++) {
-    const line = lines[index];
+    const line = out.length === 0 ? lines[index].slice(startChar) : lines[index];
     const cost = line.length + (out.length ? 1 : 0);
     if (chars + cost > maxChars) {
       if (out.length) break;
       out.push(line.slice(0, maxChars));
-      lineTruncated = true;
+      cut = startChar + maxChars;
       index++;
       break;
     }
@@ -135,21 +144,24 @@ export function page(lines: string[], start: number, maxLines: number, maxChars:
     chars += cost;
   }
   const endLine = index;
-  const truncated = endLine < totalLines;
+  const truncated = cut !== undefined || endLine < totalLines;
   return {
     startLine: start,
+    ...(startChar ? { startChar } : {}),
     endLine,
     totalLines,
     text: out.join("\n"),
     truncated,
-    ...(lineTruncated ? { lineTruncated: true } : {}),
-    continuation: truncated ? { startLine: endLine + 1 } : null,
+    ...(cut !== undefined ? { lineTruncated: true } : {}),
+    continuation: cut !== undefined ? { startLine: endLine, startChar: cut } : truncated ? { startLine: endLine + 1 } : null,
   };
 }
 
 function pageOrMissing(input: EvidenceInput, lines: string[], start: number, extra: Record<string, unknown>) {
   if (start > Math.max(lines.length, 1)) return result(input, "missing", { ...extra, totalLines: lines.length, reason: `startLine ${start} is beyond the last line ${lines.length}` });
-  return result(input, "ok", { ...extra, ...page(lines, start, input.maxLines ?? LIMITS.defaultLines, input.maxChars ?? LIMITS.maxChars) });
+  const startChar = input.startChar ?? 0;
+  if (startChar && startChar >= (lines[start - 1]?.length ?? 0)) return result(input, "missing", { ...extra, totalLines: lines.length, reason: `startChar ${startChar} is beyond the end of line ${start}` });
+  return result(input, "ok", { ...extra, ...page(lines, start, input.maxLines ?? LIMITS.defaultLines, input.maxChars ?? LIMITS.maxChars, startChar) });
 }
 
 const jobSummary = (job) => ({ id: job.id, name: job.name, status: job.status, conclusion: job.conclusion });
@@ -158,9 +170,11 @@ const stepSummary = (step) => step && { number: step.number, name: step.name, st
 export async function jobLogEvidence(input: EvidenceInput, signal?: AbortSignal) {
   const { run, failure } = await bindRun(input, signal);
   if (failure) return failure;
-  let jobs;
+  let jobs, listTruncated;
   try {
-    jobs = (await pages(input, `repos/${input.repo}/actions/runs/${input.runId}/jobs`, "jobs", signal)).filter((job) => job?.run_id === input.runId);
+    const listed = await pages(input, `repos/${input.repo}/actions/runs/${input.runId}/jobs`, "jobs", signal);
+    jobs = listed.items.filter((job) => job?.run_id === input.runId);
+    listTruncated = listed.capped;
   } catch (error) {
     const { state, reason } = classify(error);
     return result(input, state, { reason });
@@ -168,7 +182,7 @@ export async function jobLogEvidence(input: EvidenceInput, signal?: AbortSignal)
   const ordered = [...jobs].sort((a, b) => String(a.started_at ?? "").localeCompare(String(b.started_at ?? "")) || a.id - b.id);
   const job = input.jobId !== undefined ? jobs.find((candidate) => candidate.id === input.jobId) : ordered.find((candidate) => FAILED.has(candidate.conclusion));
   if (!job) {
-    if (input.jobId !== undefined) return result(input, "missing", { reason: `job ${input.jobId} is not part of run ${input.runId} in ${input.repo}` });
+    if (input.jobId !== undefined) return result(input, "missing", { ...(listTruncated ? { listTruncated } : {}), reason: `job ${input.jobId} is not part of run ${input.runId} in ${input.repo}` });
     if (run.status !== "completed") return result(input, "running", { runStatus: run.status, reason: "the run has no failed job yet" });
     return result(input, "missing", { runConclusion: run.conclusion, reason: "the run has no failed job" });
   }
@@ -224,8 +238,38 @@ const artifactSummary = (artifact) => ({
 export async function listRunArtifacts(repo: string, runId: number, signal?: AbortSignal) {
   const input = { repo, runId };
   validateEvidenceInput(input);
-  const artifacts = await pages(input, `repos/${repo}/actions/runs/${runId}/artifacts`, "artifacts", signal);
-  return artifacts.filter((artifact) => artifact?.workflow_run?.id === undefined || artifact.workflow_run.id === runId).map(artifactSummary);
+  const { items, capped } = await pages(input, `repos/${repo}/actions/runs/${runId}/artifacts`, "artifacts", signal);
+  const artifacts = items.filter((artifact) => artifact?.workflow_run?.id === undefined || artifact.workflow_run.id === runId).map(artifactSummary);
+  return { artifacts, capped };
+}
+
+// One page of an artifact's file list under the same entry-count and character budget as text, with a continuation.
+export function listingPage(entries: { path: string; size: number }[], start: number, maxEntries: number, maxChars: number) {
+  const out = [];
+  let chars = 2, index = start - 1, pathTruncated = false;
+  for (; index < entries.length && out.length < maxEntries; index++) {
+    const { path, size } = entries[index];
+    const cost = JSON.stringify({ path, size }).length + 1;
+    if (chars + cost > maxChars) {
+      if (out.length) break;
+      // A single name longer than the whole budget is cut rather than dropped, and says so.
+      out.push({ path: path.slice(0, Math.max(1, maxChars - 32)), size, pathTruncated: (pathTruncated = true) });
+      index++;
+      break;
+    }
+    out.push({ path, size });
+    chars += cost;
+  }
+  const truncated = index < entries.length;
+  return {
+    entries: out,
+    startEntry: start,
+    endEntry: index,
+    totalEntries: entries.length,
+    truncated,
+    ...(pathTruncated ? { pathTruncated } : {}),
+    continuation: truncated ? { startLine: index + 1 } : null,
+  };
 }
 
 function verifyDigest(bytes: Uint8Array, digest: unknown) {
@@ -248,9 +292,9 @@ export async function artifactEvidence(input: EvidenceInput, signal?: AbortSigna
   const { run, failure } = await bindRun(input, signal);
   if (failure) return failure;
   if (run.status !== "completed") return result(input, "running", { runStatus: run.status, reason: "artifacts are read only from a completed run" });
-  let artifacts;
+  let artifacts, listTruncated;
   try {
-    artifacts = await pages(input, `repos/${input.repo}/actions/runs/${input.runId}/artifacts`, "artifacts", signal);
+    ({ items: artifacts, capped: listTruncated } = await pages(input, `repos/${input.repo}/actions/runs/${input.runId}/artifacts`, "artifacts", signal));
   } catch (error) {
     const { state, reason } = classify(error);
     return result(input, state, { reason });
@@ -261,10 +305,12 @@ export async function artifactEvidence(input: EvidenceInput, signal?: AbortSigna
     (input.artifactName === undefined || candidate.name === input.artifactName) &&
     (candidate.workflow_run?.id === undefined || candidate.workflow_run.id === input.runId));
   const wanted = input.artifactId !== undefined ? `artifact ${input.artifactId}` : `artifact ${JSON.stringify(input.artifactName)}`;
-  if (!artifact || !Number.isInteger(artifact.id)) return result(input, "missing", { reason: `${wanted} is not part of run ${input.runId} in ${input.repo}` });
+  if (!artifact || !Number.isInteger(artifact.id)) return result(input, "missing", { ...(listTruncated ? { listTruncated } : {}), reason: `${wanted} is not part of run ${input.runId} in ${input.repo}` });
   const summary = artifactSummary(artifact);
   if (artifact.expired) return result(input, "expired", { artifact: summary, reason: "the artifact has expired" });
-  if (!(artifact.size_in_bytes <= LIMITS.maxArchiveBytes))
+  if (!Number.isInteger(artifact.size_in_bytes) || artifact.size_in_bytes < 0)
+    return result(input, "malformed", { artifact: summary, reason: "GitHub reported no valid artifact size" });
+  if (artifact.size_in_bytes > LIMITS.maxArchiveBytes)
     return result(input, "oversized", { artifact: summary, reason: `the artifact is ${artifact.size_in_bytes} bytes; the limit is ${LIMITS.maxArchiveBytes}` });
 
   let bytes: Uint8Array;
@@ -285,13 +331,13 @@ export async function artifactEvidence(input: EvidenceInput, signal?: AbortSigna
   try {
     if (input.artifactPath === undefined) {
       const entries = (await listArchive(bytes, limits)).filter((entry) => !entry.directory);
+      const start = input.startLine ?? 1;
+      if (start > Math.max(entries.length, 1)) return result(input, "missing", { artifact: summary, integrity, totalEntries: entries.length, reason: `entry ${start} is beyond the last entry ${entries.length}` });
       return result(input, "ok", {
         source: "artifact",
         artifact: summary,
         integrity,
-        entries: entries.slice(0, LIMITS.maxListedEntries).map(({ path, size }) => ({ path, size })),
-        totalEntries: entries.length,
-        truncated: entries.length > LIMITS.maxListedEntries,
+        ...listingPage(entries, start, input.maxLines ?? LIMITS.maxListedEntries, input.maxChars ?? LIMITS.maxChars),
       });
     }
     const content = await readArchiveEntry(bytes, input.artifactPath, limits);

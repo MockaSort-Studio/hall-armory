@@ -80,11 +80,30 @@ function statusOf(error) {
   return match ? Number(match[1] ?? match[2]) : undefined;
 }
 
+// Error text may echo signed download URLs or terminal control sequences: drop query strings and controls.
+export function redact(text: string) {
+  return String(text)
+    .replace(/(https?:\/\/[^\s?#"'<>]+)[?#][^\s"'<>]*/gi, "$1?[redacted]")
+    .replace(/\u001b\[[0-9;?]*[A-Za-z]/g, "")
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, " ");
+}
+
+// The HTTP status of a failure. `GithubError.status` keeps its contract (an integer `status` wins, which for a
+// synchronous `gh` failure is the exit code); this reads only HTTP-like values, falling back to what `gh` printed.
+const isHttpStatus = (value) => Number.isInteger(value) && value >= 100 && value <= 599;
+export function httpStatusOf(error): number | undefined {
+  for (const candidate of [error, error?.cause]) if (isHttpStatus(candidate?.status)) return candidate.status;
+  const text = [error?.stderr, error?.message, error?.cause?.stderr, error?.cause?.message].map((part) => String(part ?? "")).join("\n");
+  const match = text.match(/\bHTTP\s+(\d{3})\b/i);
+  return match ? Number(match[1]) : undefined;
+}
+
 export function githubError(error, operation, resource) {
   if (error instanceof GithubError) return error;
   const status = statusOf(error);
-  const detail =
-    error?.stderr?.trim() || error?.message || "unknown GitHub failure";
+  const detail = redact(
+    String(error?.stderr ?? "").trim() || error?.message || "unknown GitHub failure",
+  );
   return new GithubError(
     `GitHub ${operation} failed for ${resource}${status ? ` (HTTP ${status})` : ""}: ${detail}`,
     {
@@ -119,9 +138,12 @@ export async function gh(args, opts: Record<string, any> = {}, deps: GithubDepen
   try {
     const transport = activeTransport(deps);
     const out = await abortable(() => transport.run(args, execOpts), signal);
-    return String(out).trim();
+    const text = typeof out === "string" ? out : Buffer.from(out).toString("utf8");
+    // A transport may ignore `maxBuffer`: the bound is enforced on what it returned as well.
+    if (execOpts.maxBuffer !== undefined && Buffer.byteLength(text) > execOpts.maxBuffer) throw new GithubOversizedError(execOpts.maxBuffer);
+    return text.trim();
   } catch (error) {
-    if (error instanceof GithubCancelledError) throw error;
+    if (error instanceof GithubCancelledError || error instanceof GithubOversizedError) throw error;
     if (signal?.aborted) throw new GithubCancelledError();
     // Only a caller that set its own bound learns about an overflow as such; other callers see the same error as before.
     if (execOpts.maxBuffer !== undefined && isBufferOverflow(error)) throw new GithubOversizedError(execOpts.maxBuffer);

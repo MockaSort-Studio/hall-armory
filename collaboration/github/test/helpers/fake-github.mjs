@@ -24,3 +24,6 @@ export function fakePi() {
 }
 
 export const httpError = (status) => Object.assign(new Error(`HTTP ${status}`), { status });
+
+// What a failed synchronous `gh` call looks like: `status` is the exit code, the HTTP status is only in stderr.
+export const ghFailure = (http, text) => Object.assign(new Error(`Command failed: gh api`), { status: 1, stderr: `gh: ${text} (HTTP ${http})` });

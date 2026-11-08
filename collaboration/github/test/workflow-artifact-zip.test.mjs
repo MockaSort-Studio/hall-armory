@@ -53,9 +53,12 @@ test("ZIP64, encrypted and multi-disk archives are rejected", async () => {
   await rejects(zip([{ name: "a.txt", data: "x" }], { disk: 1 }), "malformed", /not a valid ZIP/);
 });
 
-test("traversal, absolute, backslash, control and non-UTF-8 names are rejected", async () => {
+test("traversal, absolute, backslash, control, bidi/zero-width and non-UTF-8 names are rejected", async () => {
   for (const name of ["../evil.txt", "a/../../evil.txt", "/etc/passwd", "C:/evil.txt", "a\\b.txt", "a/./b.txt", "a//b.txt", "a\u0001b.txt", "a\u001b[31m.txt"]) {
     await rejects(zip([{ name, data: "x" }]), "malformed", undefined, name);
+  }
+  for (const name of ["a\u202etxt.exe", "a\u200b.txt", "a\u2066b.txt", "\ufeffa.txt", "a\u061cb.txt"]) {
+    await rejects(zip([{ name, data: "x" }]), "malformed", /unsafe characters/, name);
   }
   await rejects(zip([{ name: Buffer.from([0x61, 0xe9, 0x2e, 0x74]), data: "x", flags: 0 }]), "malformed", /ASCII/);
   await rejects(zip([{ name: Buffer.from([0x61, 0xff, 0x2e, 0x74]), data: "x" }]), "malformed");

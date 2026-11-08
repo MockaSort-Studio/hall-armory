@@ -21,6 +21,7 @@ export type ArchiveEntry = { path: string; directory: boolean; compressedSize: n
 const UNIX = 3, S_IFMT = 0o170000, S_IFREG = 0o100000, S_IFDIR = 0o040000, ZIP64_EXTRA = 0x0001;
 const malformed = (message: string) => new ArchiveError("malformed", message);
 
+// zlib.crc32 arrived in Node 22.2; the guest runner accepts any Node 22, so 22.0 and 22.1 use the table-free loop.
 function crc32(bytes: Uint8Array) {
   if (typeof zlibCrc32 === "function") return zlibCrc32(bytes) >>> 0;
   let crc = ~0;
@@ -36,7 +37,7 @@ function checkName(entry: any) {
   const name = entry.fileName;
   if (typeof name !== "string" || !name || name.length > 1024) throw malformed("archive entry name is empty or too long");
   if (!(entry.generalPurposeBitFlag & 0x800) && /[^\u0000-\u007f]/.test(name)) throw malformed("archive entry name is neither ASCII nor flagged UTF-8");
-  if (/[\u0000-\u001f\u007f-\u009f\\\ufffd]/.test(name)) throw malformed(`archive entry name has unsafe characters: ${JSON.stringify(name)}`);
+  if (/[\u0000-\u001f\u007f-\u009f\\\ufffd\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/.test(name)) throw malformed(`archive entry name has unsafe characters: ${JSON.stringify(name)}`);
   if (name.startsWith("/") || /^[A-Za-z]:/.test(name)) throw malformed(`archive entry has an absolute path: ${JSON.stringify(name)}`);
   const segments = (name.endsWith("/") ? name.slice(0, -1) : name).split("/");
   if (segments.some((segment) => segment === "" || segment === "." || segment === ".."))
@@ -44,7 +45,7 @@ function checkName(entry: any) {
   return name;
 }
 
-function checkEntry(entry: any, limits: ArchiveLimits): ArchiveEntry {
+function checkEntry(entry: any): ArchiveEntry {
   const path = checkName(entry);
   if (entry.generalPurposeBitFlag & 0x41) throw malformed(`archive entry is encrypted: ${JSON.stringify(path)}`);
   if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8) throw malformed(`archive entry uses unsupported compression method ${entry.compressionMethod}`);
@@ -85,7 +86,7 @@ async function scan(bytes: Uint8Array, limits: ArchiveLimits, wanted?: string) {
     zipfile.on("error", fail);
     zipfile.on("entry", (raw) => {
       try {
-        const entry = checkEntry(raw, limits);
+        const entry = checkEntry(raw);
         if (names.has(entry.path)) throw malformed(`archive has a duplicate entry: ${JSON.stringify(entry.path)}`);
         names.add(entry.path);
         entries.push(entry);

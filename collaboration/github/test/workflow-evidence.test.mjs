@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { activateSuite } from "../src/index.ts";
 import { githubOperationDescriptors } from "../src/lib/suite.ts";
-import { fakeGithub, fakePi, httpError } from "./helpers/fake-github.mjs";
+import { fakeGithub, fakePi, ghFailure, httpError } from "./helpers/fake-github.mjs";
 import { zip } from "./helpers/zip.mjs";
 
 const RUN = "api repos/o/r/actions/runs/7";
@@ -96,12 +96,22 @@ test("the first failure block is the failed step of the first failed job, paged 
   assert.ok(s.keys().every((key) => [RUN, JOBS, LOG].includes(key)), "only bound ids reach GitHub");
 });
 
-test("maxChars bounds the page and an over-long line is cut with an explicit flag", async () => {
-  const s = suite({ [RUN]: run(), [JOBS]: jobs(), [LOG]: `build\tRun tests\t${"z".repeat(500)}\nbuild\tRun tests\tnext` });
-  const result = await s.evidence({ jobId: 21, maxChars: 100 });
-  assert.equal(result.text.length, 100);
-  assert.equal(result.lineTruncated, true);
-  assert.deepEqual(result.continuation, { startLine: 2 });
+test("maxChars bounds the page and an over-long line continues by character offset", async () => {
+  const long = `${"a".repeat(100)}${"b".repeat(100)}${"c".repeat(50)}`;
+  const s = suite({ [RUN]: run(), [JOBS]: jobs(), [LOG]: `build\tRun tests\t${long}\nbuild\tRun tests\tnext` });
+  const first = await s.evidence({ jobId: 21, maxChars: 100 });
+  assert.equal(first.text, "a".repeat(100));
+  assert.equal(first.lineTruncated, true);
+  assert.equal(first.truncated, true);
+  assert.deepEqual(first.continuation, { startLine: 1, startChar: 100 });
+  const second = await s.evidence({ jobId: 21, maxChars: 100, ...first.continuation });
+  assert.equal(second.text, "b".repeat(100));
+  assert.deepEqual(second.continuation, { startLine: 1, startChar: 200 });
+  const third = await s.evidence({ jobId: 21, maxChars: 100, ...second.continuation });
+  assert.equal(third.text, `${"c".repeat(50)}\nnext`);
+  assert.equal(third.continuation, null);
+  assert.equal((await s.evidence({ jobId: 21, startLine: 1, startChar: 250 })).state, "missing");
+  await assert.rejects(s.evidence({ jobId: 21, startChar: 5 }), /startChar needs startLine/);
 });
 
 test("jobs and steps must belong to the requested run before any log is fetched", async () => {
@@ -245,4 +255,91 @@ test("aborting during an artifact download rejects and reaches the transport", a
   setTimeout(() => controller.abort(), 20);
   await assert.rejects(pending, /Cancelled/);
   assert.equal(seen, controller.signal);
+});
+
+// A real synchronous `gh` failure: `status` is the exit code and the HTTP status is only in what gh printed.
+test("HTTP 404 and 410 are recognised from gh's output when status is the exit code", async () => {
+  assert.equal((await suite({ [RUN]: run(), [JOBS]: jobs(), [LOG]: ghFailure(410, "Gone") }).evidence({ jobId: 21 })).state, "expired");
+  assert.equal((await suite({ [RUN]: run(), [JOBS]: jobs(), [LOG]: ghFailure(404, "Not Found") }).evidence({ jobId: 21 })).state, "unavailable");
+  assert.equal((await suite({ [RUN]: ghFailure(404, "Not Found") }).evidence({ jobId: 21 })).state, "missing");
+  assert.equal((await suite({ [RUN]: run(), [ARTIFACTS]: artifacts(artifact()), [ZIP]: ghFailure(410, "Gone") }).evidence({ artifactId: 11 })).state, "expired");
+  assert.equal((await suite({ [RUN]: ghFailure(404, "Not Found") }).evidence({ artifactId: 11 })).state, "missing");
+  assert.equal((await suite({ [RUN]: run(), [ARTIFACTS]: artifacts(artifact()), [ZIP]: ghFailure(404, "Not Found") }).evidence({ artifactId: 11 })).state, "unavailable");
+});
+
+test("failure reasons drop signed URL query strings and control characters", async () => {
+  const leak = Object.assign(new Error("Command failed"), { status: 1, stderr: "gh: error fetching https://blob.example/logs/1.txt?sig=SECRET&se=2030 \u001b[31mboom\u0007" });
+  const result = await suite({ [RUN]: run(), [JOBS]: jobs(), [LOG]: leak }).evidence({ jobId: 21 });
+  assert.equal(result.state, "unavailable");
+  assert.ok(!result.reason.includes("SECRET"), result.reason);
+  assert.match(result.reason, /https:\/\/blob\.example\/logs\/1\.txt\?\[redacted\]/);
+  assert.ok(!/[\u0000-\u001f]/.test(result.reason));
+});
+
+test("a transport that ignores maxBuffer still yields an oversized log", async () => {
+  const s = suite({ [RUN]: run(), [JOBS]: jobs(), [LOG]: () => "a".repeat(16 * 1024 * 1024 + 1) });
+  assert.equal((await s.evidence({ jobId: 21 })).state, "oversized");
+});
+
+test("with a signal, the no-option failed log and checks wait pass the old options plus the signal only", async () => {
+  const s = suite({
+    "run view 7 -R o/r --log-failed": "tail",
+    "pr view 7 -R o/r --json headRefOid,state,isDraft,statusCheckRollup": { headRefOid: "abc", state: "OPEN", statusCheckRollup: [{ __typename: "CheckRun", name: "t", status: "COMPLETED", conclusion: "SUCCESS" }] },
+  });
+  const controller = new AbortController();
+  assert.deepEqual(await s.evidence({}, controller.signal), { runId: 7, log: "tail" });
+  const waited = await s.call("github_pull_request_checks_wait", { repo: "o/r", pullNumber: 7 }, controller.signal);
+  assert.equal(waited.state, "success");
+  assert.deepEqual(s.calls.map((c) => [c.args.join(" "), Object.keys(c.options)]), [
+    ["run view 7 -R o/r --log-failed", ["signal"]],
+    ["pr view 7 -R o/r --json headRefOid,state,isDraft,statusCheckRollup", ["signal"]],
+  ]);
+  assert.ok(s.calls.every((c) => c.options.signal === controller.signal));
+});
+
+test("lists are paged until a short page and flagged when the page limit is hit", async () => {
+  const filler = (from) => Array.from({ length: 100 }, (_, i) => artifact({ id: 1000 + from + i, name: `a${from + i}` }));
+  const full = Object.fromEntries(Array.from({ length: 10 }, (_, p) => [`api repos/o/r/actions/runs/7/jobs?per_page=100&page=${p + 1}`, { jobs: Array.from({ length: 100 }, (_, i) => ({ id: 5000 + p * 100 + i, run_id: 7, status: "completed", conclusion: "success" })) }]));
+  const capped = await suite({ [RUN]: run(), ...full }).evidence({ jobId: 21 });
+  assert.equal(capped.state, "missing");
+  assert.equal(capped.listTruncated, true);
+  const noTotal = suite({
+    [RUN]: run(),
+    [ARTIFACTS]: { artifacts: filler(0) },
+    "api repos/o/r/actions/runs/7/artifacts?per_page=100&page=2": { artifacts: [artifact({ digest: undefined })] },
+    [ZIP]: bytesRoute(archive),
+  });
+  assert.equal((await noTotal.evidence({ artifactId: 11 })).state, "ok", "page 2 was read although total_count is absent");
+});
+
+test("an artifact without a valid size is malformed and not downloaded", async () => {
+  const s = suite({ [RUN]: run(), [ARTIFACTS]: artifacts(artifact({ size_in_bytes: undefined })), [ZIP]: bytesRoute(archive) });
+  assert.equal((await s.evidence({ artifactId: 11 })).state, "malformed");
+  assert.ok(!s.keys().includes(ZIP));
+});
+
+test("an artifact file list honours maxChars and continues by entry", async () => {
+  const names = Array.from({ length: 200 }, (_, i) => `d/${String(i).padStart(3, "0")}${"x".repeat(995)}`);
+  const big = zip(names.map((name) => ({ name, data: "x", method: 0 })));
+  const s = suite({ [RUN]: run(), [ARTIFACTS]: artifacts(artifact({ digest: undefined, size_in_bytes: big.length })), [ZIP]: bytesRoute(big) });
+  const first = await s.evidence({ artifactId: 11 });
+  assert.equal(first.state, "ok");
+  assert.ok(JSON.stringify(first.entries).length <= 12_000, "the listing stays within maxChars");
+  assert.ok(first.entries.length < 200);
+  assert.equal(first.truncated, true);
+  assert.equal(first.totalEntries, 200);
+  const seen = [...first.entries.map((e) => e.path)];
+  let next = first.continuation;
+  for (let guard = 0; next && guard < 100; guard++) {
+    const page = await s.evidence({ artifactId: 11, ...next });
+    assert.ok(JSON.stringify(page.entries).length <= 12_000);
+    seen.push(...page.entries.map((e) => e.path));
+    next = page.continuation;
+  }
+  assert.deepEqual(seen, names, "every entry is reachable exactly once");
+  const tiny = await s.evidence({ artifactId: 11, maxChars: 100 });
+  assert.equal(tiny.entries.length, 1);
+  assert.equal(tiny.pathTruncated, true);
+  assert.ok(tiny.entries[0].path.length <= 100);
+  assert.deepEqual(tiny.continuation, { startLine: 2 });
 });
