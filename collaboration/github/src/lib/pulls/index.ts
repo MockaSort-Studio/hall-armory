@@ -30,7 +30,7 @@ export async function viewPullRequest(repo: string, number: number) {
     "-R",
     repo,
     "--json",
-    "number,title,body,state,isDraft,author,headRefName,baseRefName,labels,reviews,statusCheckRollup,url",
+    "number,title,body,state,isDraft,author,headRefName,baseRefName,labels,reviews,statusCheckRollup,headRefOid,url",
   ]);
 }
 

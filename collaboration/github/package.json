@@ -1,6 +1,6 @@
 {
   "name": "@mockasort-studio/pi-github-tools",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "GitHub CLI tools for Pi coding agent extensions.",
   "license": "GPL-3.0-only",
   "type": "module",
@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "diff": "9.0.0",
-    "isomorphic-git": "1.44.11"
+    "isomorphic-git": "1.44.11",
+    "yauzl": "3.2.1"
   }
 }

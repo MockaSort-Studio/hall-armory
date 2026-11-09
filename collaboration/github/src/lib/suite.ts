@@ -49,9 +49,11 @@ export function registerGithubSuite(
   if (registeredSuites.has(pi)) return;
   const descriptors = githubOperationDescriptors().map((descriptor) => ({
     ...descriptor,
-    execute: (input) =>
+    // The execution context (its abort signal) must reach the operation: dropping it makes blocking operations
+    // impossible to cancel through an injected suite.
+    execute: (input, context) =>
       withWorkspaceBackend(workspace, () =>
-        withGithubCommandTransport(transport, () => descriptor.execute(input)),
+        withGithubCommandTransport(transport, () => descriptor.execute(input, context)),
       ),
   }));
   registerOperations(pi, descriptors);
