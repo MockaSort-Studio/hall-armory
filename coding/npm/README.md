@@ -20,7 +20,8 @@ them**, without running anything from those dependencies. The package is Crew-ag
   colliding entries, directories with data, and truncated, corrupt or unterminated archives refuse the install.
   A symbolic link in the destination path is refused.
 - Bounds (hard refusals, not truncation): 32 MiB per download, 128 MiB per unpacked archive, 256 MiB and 20,000
-  entries per install, 4,000 packages, 16 MiB lockfile (checked by size before it is read). Memory stays within about
+  entries per install, 4,000 packages, 16 MiB lockfile (checked by size before it is read). Downloads are counted chunk by chunk as they stream; a response without a
+  readable stream is refused. Memory stays within about
   520 MiB: four compressed downloads in flight, one archive unpacked at a time within the remaining budget, and at
   most the 256 MiB budget kept.
 - Nothing is written until the whole tree has passed; a failed write removes what was created. Optional packages that

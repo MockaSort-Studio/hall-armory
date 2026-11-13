@@ -30,18 +30,16 @@ export function verifyDigest(bytes: Uint8Array, expected: Buffer) {
     throw new Error("integrity mismatch");
 }
 
-// Reads a response body, refusing anything over `max` bytes (declared or actual).
+// Reads a response body as it streams in, refusing anything over `max` bytes (declared or counted chunk by chunk).
+// The injected `fetch` is the host's own: a stream that hands over one enormous chunk is outside this bound.
 export async function readBounded(response: any, max: number): Promise<Uint8Array> {
   const declared = Number(response.headers?.get?.("content-length"));
   if (Number.isFinite(declared) && declared > max) throw new Error(`response is larger than ${max} bytes`);
   const chunks: Uint8Array[] = [];
   let total = 0;
   const reader = response.body?.getReader?.();
-  if (!reader) {
-    const whole = new Uint8Array(await response.arrayBuffer());
-    if (whole.length > max) throw new Error(`response is larger than ${max} bytes`);
-    return whole;
-  }
+  // Only a streamed body can be bounded while it arrives; one that has to be read whole is refused.
+  if (!reader) throw new Error("the registry answer has no readable stream");
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;

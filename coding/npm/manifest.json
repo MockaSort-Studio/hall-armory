@@ -4,7 +4,7 @@
   "package": {
     "name": "@mockasort-studio/pi-npm-tools",
     "version": "0.1.0",
-    "integrity": "sha512-zA7ZdZQhkGRHrYELBkYVo4/gA7uYkjpXU/2FvxDHwQ9/Qc8sB49TboQ+BZ2yX+rF1BwXe0Mbh5QaHLOvBIhACA=="
+    "integrity": "sha512-2rtITY7zJJai+rM5RYMFBoERlfKcS6+z5FZbisYy3HJbkNUwSG5Yd7Mx81KJ+WzMiJbD9p3z4VUEspxkgBGvFA=="
   },
   "summary": "Lockfile-verified npm dependency install and advisory audit, without running any package code.",
   "capabilities": [

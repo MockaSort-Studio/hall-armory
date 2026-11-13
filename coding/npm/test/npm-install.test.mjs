@@ -221,3 +221,18 @@ test("a lockfile over its cap is refused by size before it is read, and a symlin
   linked.files.set("/workspace/sub/package-lock.json", linked.files.get("/workspace/package-lock.json"));
   await assert.rejects(run(linked, fetch, { dir: "sub" }), /symbolic link/);
 });
+
+test("a response that cannot be streamed is refused rather than read whole", async () => {
+  const a = locked("left-pad", "1.3.0");
+  const { workspace } = setup({ "node_modules/left-pad": a });
+  const whole = { ok: true, status: 200, headers: new Headers(), redirected: false, url: "", arrayBuffer: async () => a.archive.buffer };
+  await assert.rejects(run(workspace, async () => whole), /no readable stream/);
+  const huge = () => new Response(new ReadableStream({ pull: (controller) => controller.enqueue(new Uint8Array(1024 * 1024)) }));
+  const saved = LIMITS.tarballBytes;
+  LIMITS.tarballBytes = 3 * 1024 * 1024;
+  try {
+    await assert.rejects(run(workspace, fakeFetch({ [a.entry.resolved]: huge })), /larger than/);
+  } finally {
+    LIMITS.tarballBytes = saved;
+  }
+});
