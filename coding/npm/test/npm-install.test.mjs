@@ -1,0 +1,150 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { activateSuite } from "../src/index.ts";
+import { LIMITS } from "../src/lib/limits.ts";
+import { fakeFetch, fakeWorkspace, lockfile, locked, packageTarball, sri, tarEntry, tarball, url } from "./helpers.mjs";
+
+const run = async (workspace, fetch, input = {}) => {
+  const tools = new Map();
+  activateSuite({ registerTool: (tool) => tools.set(tool.name, tool) }, { workspace, fetch });
+  return (await tools.get("npm_install_verified").execute("id", input)).details;
+};
+const setup = (packages, extra = {}) => {
+  const routes = {};
+  const entries = {};
+  for (const [key, item] of Object.entries(packages)) {
+    entries[key] = item.entry;
+    routes[item.entry.resolved] = item.archive;
+  }
+  const workspace = fakeWorkspace({ "/workspace/package-lock.json": lockfile(entries), ...extra });
+  return { workspace, fetch: fakeFetch(routes) };
+};
+
+test("a locked tree is verified and written exactly as locked, from the registry only, with no redirects", async () => {
+  const a = locked("left-pad", "1.3.0", { "bin/run.js": "#!/usr/bin/env node\n" });
+  const b = locked("@scope/nested", "2.0.0");
+  const { workspace, fetch } = setup({ "node_modules/left-pad": a, "node_modules/left-pad/node_modules/@scope/nested": b });
+  const result = await run(workspace, fetch);
+  assert.equal(result.installed, 2);
+  assert.equal(workspace.files.get("/workspace/node_modules/left-pad/bin/run.js").toString(), "#!/usr/bin/env node\n");
+  assert.ok(workspace.files.has("/workspace/node_modules/left-pad/node_modules/@scope/nested/index.js"));
+  assert.ok(!workspace.files.has("/workspace/node_modules/left-pad/package/index.js"), "the leading package/ is stripped");
+  assert.equal(fetch.calls.length, 2);
+  for (const call of fetch.calls) {
+    assert.match(call.url, /^https:\/\/registry\.npmjs\.org\//);
+    assert.equal(call.init.redirect, "error");
+  }
+  assert.match(result.note, /No scripts were run/);
+});
+
+test("an integrity mismatch is refused before the archive is read, and nothing is written", async () => {
+  const good = locked("left-pad", "1.3.0");
+  // Hostile bytes that would fail the tar rules too: the error must be the integrity one, proving order.
+  const hostile = tarball([tarEntry("package/x", "", { type: "2", linkname: "/etc/passwd" })]);
+  const { workspace } = setup({ "node_modules/left-pad": good });
+  const result = run(workspace, fakeFetch({ [good.entry.resolved]: hostile }));
+  await assert.rejects(result, /node_modules\/left-pad: integrity mismatch/);
+  assert.deepEqual([...workspace.files.keys()], ["/workspace/package-lock.json"]);
+});
+
+test("lock entries this suite cannot install exactly as locked refuse the whole install", async () => {
+  const good = locked("left-pad", "1.3.0");
+  const bad = [
+    ["http source", { ...good.entry, resolved: good.entry.resolved.replace("https:", "http:") }],
+    ["another host", { ...good.entry, resolved: "https://registry.example.com/left-pad/-/left-pad-1.3.0.tgz" }],
+    ["lookalike host", { ...good.entry, resolved: "https://registry.npmjs.org.evil.test/left-pad/-/left-pad-1.3.0.tgz" }],
+    ["userinfo", { ...good.entry, resolved: "https://user:pw@registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz" }],
+    ["port", { ...good.entry, resolved: "https://registry.npmjs.org:8443/left-pad/-/left-pad-1.3.0.tgz" }],
+    ["git source", { ...good.entry, resolved: "git+https://github.com/o/r.git#abc" }],
+    ["no integrity", { version: "1.3.0", resolved: good.entry.resolved }],
+    ["sha1 integrity", { ...good.entry, integrity: "sha1-AAAAAAAAAAAAAAAAAAAAAAAAAAA=" }],
+    ["two hashes", { ...good.entry, integrity: `${good.entry.integrity} sha1-AAAAAAAAAAAAAAAAAAAAAAAAAAA=` }],
+  ];
+  for (const [name, entry] of bad) {
+    const workspace = fakeWorkspace({ "/workspace/package-lock.json": lockfile({ "node_modules/left-pad": entry }) });
+    const fetch = fakeFetch({ "*": good.archive });
+    await assert.rejects(run(workspace, fetch), /left-pad/, name);
+    assert.equal(fetch.calls.length, 0, `${name}: nothing is downloaded`);
+  }
+  for (const [name, packages] of [
+    ["a link", { "node_modules/app": { resolved: "packages/app", link: true } }],
+    ["a workspace path", { "packages/app": { version: "1.0.0" } }],
+    ["a traversal key", { "node_modules/../evil": good.entry }],
+  ]) {
+    const workspace = fakeWorkspace({ "/workspace/package-lock.json": lockfile(packages) });
+    await assert.rejects(run(workspace, fakeFetch({})), /unsupported lockfile entry/, name);
+  }
+  const v1 = fakeWorkspace({ "/workspace/package-lock.json": JSON.stringify({ lockfileVersion: 1, dependencies: {} }) });
+  await assert.rejects(run(v1, fakeFetch({})), /lockfileVersion 2 or 3/);
+});
+
+test("optional packages that fail are reported, dev packages are left out of a production install", async () => {
+  const main = locked("left-pad", "1.3.0");
+  const dev = locked("tester", "1.0.0", undefined, { dev: true });
+  const optional = locked("native-thing", "1.0.0", undefined, { optional: true });
+  const bundled = locked("inside", "1.0.0", undefined, { inBundle: true });
+  const { workspace, fetch } = setup({
+    "node_modules/left-pad": main,
+    "node_modules/tester": dev,
+    "node_modules/native-thing": { ...optional, entry: { ...optional.entry, integrity: sri(Buffer.from("other")) } },
+    "node_modules/left-pad/node_modules/inside": bundled,
+  });
+  const result = await run(workspace, fetch, { include: "production" });
+  assert.equal(result.installed, 1);
+  assert.deepEqual(
+    result.skipped.map((item) => [item.path, item.reason]).sort(),
+    [
+      ["node_modules/left-pad/node_modules/inside", "bundled in its parent package"],
+      ["node_modules/native-thing", "integrity mismatch"],
+      ["node_modules/tester", "development dependency"],
+    ],
+  );
+  assert.ok(!workspace.files.has("/workspace/node_modules/tester/index.js"));
+});
+
+test("an existing node_modules is never overwritten", async () => {
+  const { workspace, fetch } = setup({ "node_modules/left-pad": locked("left-pad", "1.3.0") });
+  workspace.directories.add("/workspace/node_modules");
+  await assert.rejects(run(workspace, fetch), /never overwrites/);
+  assert.equal(fetch.calls.length, 0);
+});
+
+test("a write failure leaves no partial tree behind", async () => {
+  const a = locked("left-pad", "1.3.0", { "a.js": "1", "b.js": "2", "c.js": "3" });
+  const { workspace: seeded, fetch } = setup({ "node_modules/left-pad": a });
+  const workspace = fakeWorkspace(Object.fromEntries(seeded.files), { failWriteAt: 3 });
+  await assert.rejects(run(workspace, fetch), /disk full/);
+  assert.deepEqual([...workspace.files.keys()], ["/workspace/package-lock.json"]);
+  assert.ok(![...workspace.directories].some((path) => path.includes("node_modules")));
+});
+
+test("download, unpacked-size and entry caps refuse the install", async () => {
+  const a = locked("left-pad", "1.3.0");
+  const oversized = new Response("x", { headers: { "content-length": String(LIMITS.tarballBytes + 1) } });
+  const first = setup({ "node_modules/left-pad": a });
+  await assert.rejects(run(first.workspace, fakeFetch({ [a.entry.resolved]: oversized })), /larger than/);
+  const saved = { ...LIMITS };
+  try {
+    LIMITS.totalUnpackedBytes = 4;
+    const second = setup({ "node_modules/left-pad": a });
+    await assert.rejects(run(second.workspace, second.fetch), /total size or entry cap/);
+    LIMITS.totalUnpackedBytes = saved.totalUnpackedBytes;
+    LIMITS.totalEntries = 2;
+    const third = setup({ "node_modules/left-pad": a });
+    await assert.rejects(run(third.workspace, third.fetch), /total size or entry cap|too many entries/);
+  } finally {
+    Object.assign(LIMITS, saved);
+  }
+});
+
+test("registry failures are errors, the lockfile and paths stay inside the workspace, and the source never executes anything", async () => {
+  const a = locked("left-pad", "1.3.0");
+  const { workspace } = setup({ "node_modules/left-pad": a });
+  await assert.rejects(run(workspace, fakeFetch({ [a.entry.resolved]: { status: 503, body: "" } })), /HTTP 503/);
+  for (const input of [{ lockfile: "../lock.json" }, { lockfile: "/etc/passwd" }, { dir: "a/../../b" }, { dir: "a\\b" }])
+    await assert.rejects(run(workspace, fakeFetch({}), input), /workspace/);
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dir = new URL("../src/lib/", import.meta.url);
+  for (const file of readdirSync(dir))
+    assert.doesNotMatch(readFileSync(new URL(file, dir), "utf8"), /child_process|execFile|spawn\(|eval\(|new Function/, file);
+});

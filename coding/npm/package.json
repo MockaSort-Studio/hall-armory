@@ -1,0 +1,34 @@
+{
+  "name": "@mockasort-studio/pi-npm-tools",
+  "version": "0.1.0",
+  "description": "Verified npm dependency install and audit tools for Pi coding agent extensions.",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "npm"
+  ],
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MockaSort-Studio/hall-armory.git",
+    "directory": "coding/npm"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs && bash test-install.sh"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}
