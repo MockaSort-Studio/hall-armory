@@ -10,7 +10,8 @@ suite=${1:?usage: test-guest-compat.sh <suite-path> <nix-system>}
 system=${2:?usage: test-guest-compat.sh <suite-path> <nix-system>}
 out=$("$here/cache-suite.sh" "$suite" "$system" --print-out-paths)
 "$here/check-closure.sh" "$out"
-gh=$(nix path-info -r "$out" | grep -E -- '-gh-[0-9]')
+# A suite may ship native tools (the GitHub suite ships gh); one that does not has only its runner to check.
+gh=$(nix path-info -r "$out" | grep -E -- '-gh-[0-9]' || true)
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -19,8 +20,16 @@ first_tool=$(jq -r '.tools[0]' "$suite/manifest.json")
 printf '{"operations":["%s"]}' "$first_tool" > "$tmp/in.json"
 
 guest() { docker run --rm -v /nix/store:/nix/store:ro -v "$tmp:/work" node:24-alpine "$@"; }
-# One container, so the wrapper's guest-local copy of gh can be checked after the first run.
-guest sh -c "$out/bin/armory-suite describe /work/in.json /work/out.json && test -x /tmp/.hall-armory-bin/gh && /tmp/.hall-armory-bin/gh --version >/dev/null"
+if [ -n "$gh" ]; then
+  # One container, so the wrapper's guest-local copy of gh can be checked after the first run.
+  guest sh -c "$out/bin/armory-suite describe /work/in.json /work/out.json && test -x /tmp/.hall-armory-bin/gh && /tmp/.hall-armory-bin/gh --version >/dev/null"
+else
+  guest "$out/bin/armory-suite" describe /work/in.json /work/out.json
+fi
 jq -e --arg tool "$first_tool" '.operations | length == 1 and .[0].name == $tool' "$tmp/out.json" >/dev/null
-guest "$gh/bin/gh" --version | grep -q '^gh version'
-echo "guest compat OK: describe and gh run on Alpine/musl with Node 24"
+if [ -n "$gh" ]; then
+  guest "$gh/bin/gh" --version | grep -q '^gh version'
+  echo "guest compat OK: describe and gh run on Alpine/musl with Node 24"
+else
+  echo "guest compat OK: describe runs on Alpine/musl with Node 24"
+fi
