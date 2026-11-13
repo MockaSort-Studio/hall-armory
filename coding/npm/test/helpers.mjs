@@ -78,7 +78,7 @@ export function fakeFetch(routes) {
 }
 
 // A promise-style filesystem over a Map; enough of node:fs for the suite, with node's error codes.
-export function fakeWorkspace(initial = {}, { failWriteAt } = {}) {
+export function fakeWorkspace(initial = {}, { failWriteAt, mkdirHook, symlinks = [] } = {}) {
   const files = new Map(Object.entries(initial));
   const directories = new Set(["/", "/workspace"]);
   const missing = (path) => Object.assign(new Error(`ENOENT ${path}`), { code: "ENOENT" });
@@ -97,11 +97,17 @@ export function fakeWorkspace(initial = {}, { failWriteAt } = {}) {
       },
       async lstat(path) {
         if (files.has(path)) return { isFile: () => true, isDirectory: () => false };
-        if (directories.has(path)) return { isFile: () => false, isDirectory: () => true };
+        if (directories.has(path)) return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => symlinks.includes(path) };
         throw missing(path);
       },
       async mkdir(path) {
+        if (directories.has(path) || files.has(path)) throw Object.assign(new Error(`EEXIST ${path}`), { code: "EEXIST" });
+        mkdirHook?.(path);
         directories.add(path);
+      },
+      async stat(path) {
+        if (files.has(path)) return { size: files.get(path).length };
+        throw missing(path);
       },
       async unlink(path) {
         if (!files.delete(path)) throw missing(path);

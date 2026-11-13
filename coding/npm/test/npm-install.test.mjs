@@ -148,3 +148,76 @@ test("registry failures are errors, the lockfile and paths stay inside the works
   for (const file of readdirSync(dir))
     assert.doesNotMatch(readFileSync(new URL(file, dir), "utf8"), /child_process|execFile|spawn\(|eval\(|new Function/, file);
 });
+
+test("an answer that was redirected, or came from another URL, is refused even if fetch ignored redirect:error", async () => {
+  const a = locked("left-pad", "1.3.0");
+  const { workspace } = setup({ "node_modules/left-pad": a });
+  const redirected = () => Object.defineProperty(new Response(a.archive), "redirected", { value: true });
+  await assert.rejects(run(workspace, fakeFetch({ [a.entry.resolved]: redirected })), /was redirected/);
+  const elsewhere = () => Object.defineProperty(new Response(a.archive), "url", { value: "https://evil.test/left-pad.tgz" });
+  await assert.rejects(run(workspace, fakeFetch({ [a.entry.resolved]: elsewhere })), /different URL/);
+});
+
+test("node_modules is claimed atomically: if it appears after the early check, nothing is written", async () => {
+  const a = locked("left-pad", "1.3.0");
+  const { workspace: seeded, fetch } = setup({ "node_modules/left-pad": a });
+  const workspace = fakeWorkspace(Object.fromEntries(seeded.files));
+  workspace.directories.add("/workspace/node_modules"); // appears "meanwhile": only mkdir can notice
+  const real = workspace.fs.promises.lstat;
+  let first = true;
+  workspace.fs.promises.lstat = async (path) => {
+    if (path === "/workspace/node_modules" && first) {
+      first = false; // the early existence check sees nothing
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    }
+    return real(path);
+  };
+  await assert.rejects(run(workspace, fetch), /appeared while installing/);
+  assert.deepEqual([...workspace.files.keys()], ["/workspace/package-lock.json"]);
+});
+
+test("one package cannot overwrite a file another locked package owns", async () => {
+  const inner = locked("b", "1.0.0", { "index.js": "verified b" });
+  const outer = locked("a", "1.0.0", {}, {});
+  const hostile = packageTarball({ "package.json": "{}", "node_modules/b/package.json": "hostile", "node_modules/b/index.js": "hostile" });
+  const poisoned = { archive: hostile, entry: { ...outer.entry, integrity: sri(hostile) } };
+  const { workspace, fetch } = setup({ "node_modules/a": poisoned, "node_modules/a/node_modules/b": inner });
+  await assert.rejects(run(workspace, fetch), /duplicate or colliding/);
+  assert.deepEqual([...workspace.files.keys()], ["/workspace/package-lock.json"]);
+});
+
+test("unpacking is serialized within the remaining budget, so the total cap holds before memory is spent", async () => {
+  const sizes = [3000, 3000, 3000];
+  const items = Object.fromEntries(sizes.map((size, index) => [`node_modules/p${index}`, locked(`p${index}`, "1.0.0", { "big.bin": "x".repeat(size) })]));
+  const saved = { ...LIMITS };
+  try {
+    LIMITS.totalUnpackedBytes = 3 * 4096 + 2048; // room for two archives, not three
+    const { workspace, fetch } = setup(items);
+    await assert.rejects(run(workspace, fetch), /total size or entry cap/);
+    const optional = Object.fromEntries(sizes.map((size, index) => [`node_modules/q${index}`, locked(`q${index}`, "1.0.0", { "big.bin": "x".repeat(size) }, { optional: true })]));
+    const second = setup(optional);
+    await assert.rejects(run(second.workspace, second.fetch), /total size or entry cap/, "the total cap is fatal even for optional packages");
+  } finally {
+    Object.assign(LIMITS, saved);
+  }
+});
+
+test("a lockfile over its cap is refused by size before it is read, and a symlinked destination is refused", async () => {
+  const a = locked("left-pad", "1.3.0");
+  const { workspace, fetch } = setup({ "node_modules/left-pad": a });
+  let read = false;
+  const readFile = workspace.fs.promises.readFile;
+  workspace.fs.promises.readFile = async (...args) => ((read = true), readFile(...args));
+  const saved = LIMITS.lockfileBytes;
+  LIMITS.lockfileBytes = 10;
+  try {
+    await assert.rejects(run(workspace, fetch), /larger than 10 bytes/);
+    assert.equal(read, false, "the oversized lockfile was never read");
+  } finally {
+    LIMITS.lockfileBytes = saved;
+  }
+  const linked = fakeWorkspace({ "/workspace/package-lock.json": lockfile({ "node_modules/left-pad": a.entry }) }, { symlinks: ["/workspace/sub"] });
+  linked.directories.add("/workspace/sub");
+  linked.files.set("/workspace/sub/package-lock.json", linked.files.get("/workspace/package-lock.json"));
+  await assert.rejects(run(linked, fetch, { dir: "sub" }), /symbolic link/);
+});

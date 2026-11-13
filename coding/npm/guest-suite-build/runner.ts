@@ -18,9 +18,10 @@ try {
       operations: descriptors.map(({ name, description, parameters }) => ({ name, description, parameters })),
     });
   } else if (mode === "invoke") {
-    const descriptor = byName.get(request.operation);
-    if (!descriptor) throw new Error(`Guest operation is not approved: ${request.operation}`);
-    write({ result: await descriptor.execute(request.input) });
+    if (!byName.has(request.operation)) throw new Error(`Guest operation is not approved: ${request.operation}`);
+    // These operations fetch from the npm registry and write a dependency tree into a workspace the host holds:
+    // they run host-side. A guest has no registry access, so this runner describes the operations and nothing more.
+    throw new Error(`${request.operation} runs on the host, not in a guest`);
   } else {
     throw new Error(`Unsupported guest suite mode: ${mode}`);
   }

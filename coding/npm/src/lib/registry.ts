@@ -70,5 +70,9 @@ export async function registryRequest(
     signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
   });
   if (!response?.ok) throw new Error(`registry request failed (HTTP ${response?.status})`);
+  // An injected fetch may follow redirects despite `redirect: "error"`: the answer must come from where it was asked.
+  if (response.redirected) throw new Error("the registry answer was redirected");
+  if (response.url && new URL(response.url).href !== new URL(url).href)
+    throw new Error("the registry answer came from a different URL");
   return readBounded(response, max);
 }

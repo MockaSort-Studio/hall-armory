@@ -69,11 +69,46 @@ test("corrupt, truncated and non-gzip archives refuse", () => {
 });
 
 test("a gzip bomb and an entry flood are refused by their caps", () => {
-  const bomb = gzipSync(Buffer.alloc(LIMITS.packageUnpackedBytes + 1024 * 1024));
-  assert.ok(bomb.length < 1024 * 1024, "the bomb is small on the wire");
-  assert.throws(() => extractTarball(bomb), /unpacks beyond its size cap/);
-  const flood = tarball(Array.from({ length: LIMITS.totalEntries + 1 }, (_, index) => tarEntry(`package/f${index}`, "")));
-  assert.throws(() => extractTarball(flood), /too many entries/);
+  const saved = { ...LIMITS };
+  try {
+    LIMITS.packageUnpackedBytes = 64 * 1024;
+    const bomb = gzipSync(Buffer.alloc(1024 * 1024));
+    assert.ok(bomb.length < 4096, "the bomb is tiny on the wire");
+    assert.throws(() => extractTarball(bomb), /unpacks beyond its size cap/);
+    LIMITS.packageUnpackedBytes = saved.packageUnpackedBytes;
+    LIMITS.totalEntries = 50;
+    const flood = tarball(Array.from({ length: 51 }, (_, index) => tarEntry(`package/f${index}`, "")));
+    assert.throws(() => extractTarball(flood), /too many entries/);
+    assert.throws(() => extractTarball(tarball([tarEntry("package/a", "x".repeat(1000))]), 100), /size cap/);
+  } finally {
+    Object.assign(LIMITS, saved);
+  }
+});
+
+test("every entry shares one top-level directory", () => {
+  refused([tarEntry("package/a.js", "1"), tarEntry("other/b.js", "2")], /more than one top-level directory/);
+  assert.deepEqual(extractTarball(tarball([tarEntry("pkg-1.0/a.js", "1"), tarEntry("pkg-1.0/b.js", "2")])).files.map((f) => f.path), ["a.js", "b.js"]);
+});
+
+test("names a filesystem may fold together collide: Unicode normalization, trailing dots and spaces", () => {
+  refused([tarEntry("package/caf\u00e9.js", "1"), tarEntry("package/cafe\u0301.js", "2")], /duplicate or colliding/);
+  refused([tarEntry("package/x", "1"), tarEntry("package/x.", "2")], /duplicate or colliding/);
+  refused([tarEntry("package/y", "1"), tarEntry("package/y ", "2")], /duplicate or colliding/);
+  refused([tarEntry("package/dir.", "", { type: "5" }), tarEntry("package/dir/f", "1"), tarEntry("package/dir./f", "2")], /duplicate or colliding/);
+});
+
+test("directories with data, a missing terminator and trailing data refuse the archive", () => {
+  const withData = tarEntry("package/d/", "", { type: "5" });
+  withData.write("00000000020\0", 124, "latin1");
+  withData.fill(0x20, 148, 156);
+  withData.write(`${withData.subarray(0, 512).reduce((sum, byte) => sum + byte, 0).toString(8).padStart(6, "0")}\0 `, 148, "latin1");
+  const dirWithData = Buffer.concat([withData, Buffer.alloc(512)]); // its 16 bytes of data, padded
+  assert.throws(
+    () => extractTarball(gzipSync(Buffer.concat([tarEntry("package/", "", { type: "5" }), dirWithData, Buffer.alloc(1024)]))),
+    /directory entry has data/,
+  );
+  refused([tarEntry("package/a.js", "abc")], /no clean terminator/, { end: false });
+  assert.throws(() => extractTarball(gzipSync(Buffer.concat([tarEntry("package/a.js", "abc"), Buffer.alloc(1024), Buffer.from("junk")]))), /no clean terminator/);
 });
 
 test("the package fixture helper makes a well-formed archive", () => {
