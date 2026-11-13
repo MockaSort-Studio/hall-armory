@@ -1,0 +1,28 @@
+{
+  "format": "hall.armory-suite/v1",
+  "extension": "pi-npm-tools",
+  "package": {
+    "name": "@mockasort-studio/pi-npm-tools",
+    "version": "0.1.0",
+    "integrity": "sha512-2rtITY7zJJai+rM5RYMFBoERlfKcS6+z5FZbisYy3HJbkNUwSG5Yd7Mx81KJ+WzMiJbD9p3z4VUEspxkgBGvFA=="
+  },
+  "summary": "Lockfile-verified npm dependency install and advisory audit, without running any package code.",
+  "capabilities": [
+    "dependencies",
+    "audit"
+  ],
+  "native": {
+    "closure": ".",
+    "output": "guest"
+  },
+  "network": {
+    "allowedHosts": [
+      "registry.npmjs.org"
+    ],
+    "credentials": []
+  },
+  "tools": [
+    "npm_install_verified",
+    "npm_audit"
+  ]
+}

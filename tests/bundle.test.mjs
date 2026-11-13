@@ -33,3 +33,20 @@ test("the extension bundle is self-contained, deterministic and registers the su
   );
   assert.deepEqual([...new Set(external)], [], "only Node builtins and Pi packages are left external");
 });
+
+test("the npm suite bundle is self-contained and registers its operations", async (t) => {
+  const out = mkdtempSync(join(tmpdir(), "armory-bundle-npm-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  const sources = JSON.parse(execFileSync("node", ["scripts/bundle-extensions.mjs", "--out", out], { cwd: root, encoding: "utf8" }));
+  const entry = sources["coding/pi-npm-tools"];
+  const bytes = readFileSync(join(out, entry.file));
+  const module = await import(join(out, entry.file));
+  const registered = [];
+  module.activateSuite({ registerTool: (tool) => registered.push(tool.name) });
+  assert.deepEqual(registered.sort(), ["npm_audit", "npm_install_verified"]);
+  const specifiers = [...bytes.toString().matchAll(/(?:\bfrom|\brequire\()\s*"([A-Za-z0-9@][A-Za-z0-9@/._:-]*)"/g)].map((match) => match[1]);
+  const external = specifiers.filter(
+    (name) => !name.startsWith("node:") && !builtinModules.includes(name) && !name.startsWith("@earendil-works/"),
+  );
+  assert.deepEqual([...new Set(external)], []);
+});

@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "npm run test:catalog && npm run test:github",
+    "test": "npm run test:catalog && npm run test:github && npm run test:npm",
     "test:catalog": "node --test tests/*.test.mjs && npm run validate",
     "test:github": "node --test collaboration/github/test/*.test.mjs && bash collaboration/github/test-install.sh",
-    "validate": "node tests/validate-catalog.mjs"
+    "validate": "node tests/validate-catalog.mjs",
+    "test:npm": "node --test coding/npm/test/*.test.mjs && bash coding/npm/test-install.sh"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.87.1",

@@ -9,6 +9,15 @@
           "manifest": "collaboration/github/manifest.json"
         }
       ]
+    },
+    {
+      "name": "coding",
+      "suites": [
+        {
+          "extension": "pi-npm-tools",
+          "manifest": "coding/npm/manifest.json"
+        }
+      ]
     }
   ]
 }

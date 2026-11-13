@@ -13,6 +13,7 @@ mounts its derived immutable layer only when preparation is approved.
 ```text
 manifest.json                    # lockers and suite index
 collaboration/github/             # suite manifest and releasable GitHub package
+coding/npm/                       # suite manifest and releasable npm package
 ```
 
 Each suite manifest identifies one independently installable Pi package, a
